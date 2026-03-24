@@ -791,8 +791,13 @@ async function loadRecipeDetail(recipeId: string) {
           const owned = ing.owned ?? '?';
           return `
             <div class="craft-ingredient ${has ? 'has' : 'missing'}" title="${ing.hint || 'Ингредиент'}">
-              <div class="craft-ing-name">${ing.name} <span class="craft-ing-qty-inline">×${ing.quantity}</span></div>
-              <div class="craft-ing-qty">${owned} / ${ing.quantity}</div>
+              <div class="craft-ing-row">
+                ${ing.img ? `<img src="${ing.img}" class="craft-ing-icon" alt="" />` : '<span class="craft-ing-icon-placeholder">📦</span>'}
+                <div class="craft-ing-info">
+                  <div class="craft-ing-name">${ing.name} <span class="craft-ing-qty-inline">×${ing.quantity}</span></div>
+                  <div class="craft-ing-qty">${owned} / ${ing.quantity}</div>
+                </div>
+              </div>
               ${ing.hint ? `<div class="craft-ing-hint">📍 ${ing.hint}</div>` : ''}
             </div>
           `;
@@ -882,6 +887,10 @@ function addCraftStyles() {
     .craft-ingredient.missing { background:rgba(255,255,255,0.02);border-color:rgba(255,255,255,0.06);opacity:0.5; }
     .craft-ingredient.missing .craft-ing-name { color:var(--text-dim,#9a9a9e); }
     .craft-ingredient:hover { opacity:1 !important; }
+    .craft-ing-row { display:flex;gap:10px;align-items:center; }
+    .craft-ing-icon { width:32px;height:32px;object-fit:contain;border-radius:4px;flex-shrink:0;border:1px solid rgba(255,255,255,0.08); }
+    .craft-ing-icon-placeholder { width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0; }
+    .craft-ing-info { flex:1; }
     .craft-ing-name { font-size:0.85rem;font-weight:600;color:var(--text,#e8e6e0); }
     .craft-ing-qty { font-size:0.75rem;color:var(--text-dim,#9a9a9e);margin-top:2px; }
     .craft-ing-hint { font-size:0.7rem;color:var(--gold-dim,#c9a24e);margin-top:4px;font-style:italic; }

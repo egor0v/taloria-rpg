@@ -546,21 +546,37 @@ router.get('/craft/recipes', auth(), async (req, res, next) => {
       hero = await Hero.findOne({ _id: heroId, userId: req.user.userId }).lean();
     }
 
-    // Load craft limits from GameItem
-    const craftItemIds = recipes.map(r => r.result?.itemId || r.recipeId);
-    const craftItems = await GameItem.find({ itemId: { $in: craftItemIds } }).select('itemId craftLimit craftCount').lean();
+    // Load craft limits + all item images from GameItem
+    const allIngredientIds = new Set();
+    const craftResultIds = [];
+    recipes.forEach(r => {
+      craftResultIds.push(r.result?.itemId || r.recipeId);
+      (r.ingredients || []).forEach(i => { if (i.itemId) allIngredientIds.add(i.itemId); });
+    });
+    const allRelevantIds = [...new Set([...craftResultIds, ...allIngredientIds])];
+    const allRelevantItems = await GameItem.find({ itemId: { $in: allRelevantIds } }).select('itemId name img craftLimit craftCount').lean();
+    const imgLookup = {};
     const craftLimits = {};
-    craftItems.forEach(ci => { craftLimits[ci.itemId] = { limit: ci.craftLimit || 0, count: ci.craftCount || 0 }; });
+    allRelevantItems.forEach(ci => {
+      if (ci.img) { imgLookup[ci.itemId] = ci.img; imgLookup[ci.name] = ci.img; }
+      if (craftResultIds.includes(ci.itemId)) {
+        craftLimits[ci.itemId] = { limit: ci.craftLimit || 0, count: ci.craftCount || 0 };
+      }
+    });
 
     const annotated = recipes.map(recipe => {
       const resultId = recipe.result?.itemId || recipe.recipeId;
       const limits = craftLimits[resultId] || { limit: 0, count: 0 };
       const soldOut = limits.limit > 0 && limits.count >= limits.limit;
 
-      let ingredientStatus = recipe.ingredients || [];
+      // Enrich ingredients with images
+      let ingredientStatus = (recipe.ingredients || []).map(ing => ({
+        ...ing,
+        img: imgLookup[ing.itemId] || imgLookup[ing.name] || '',
+      }));
       let canCraft = false;
       if (hero && !soldOut) {
-        ingredientStatus = (recipe.ingredients || []).map(ing => {
+        ingredientStatus = ingredientStatus.map(ing => {
           const owned = (hero.inventory || [])
             .filter(item => item.itemId === ing.itemId || item.name === ing.name)
             .reduce((sum, item) => sum + (item.quantity || 1), 0);
@@ -569,8 +585,14 @@ router.get('/craft/recipes', auth(), async (req, res, next) => {
         canCraft = ingredientStatus.every(i => i.hasEnough);
       }
 
+      // Enrich result image
+      const enrichedResult = recipe.result ? {
+        ...recipe.result,
+        img: recipe.result.img || imgLookup[recipe.result.itemId] || imgLookup[recipe.result.name] || '',
+      } : recipe.result;
+
       return {
-        ...recipe, ingredientStatus, canCraft, soldOut,
+        ...recipe, result: enrichedResult, ingredientStatus, canCraft, soldOut,
         craftLimit: limits.limit, craftCount: limits.count,
         craftRemaining: limits.limit > 0 ? limits.limit - limits.count : null,
       };
@@ -586,27 +608,39 @@ router.get('/craft/recipes/:recipeId', auth(), async (req, res, next) => {
     const recipe = await CraftRecipe.findOne({ recipeId: req.params.recipeId, active: true }).lean();
     if (!recipe) return res.status(404).json({ error: 'Рецепт не найден' });
 
+    // Load images for all ingredients and result
+    const ingIds = (recipe.ingredients || []).map(i => i.itemId).filter(Boolean);
+    const resultId = recipe.result?.itemId || recipe.recipeId;
+    const allIds = [...new Set([...ingIds, resultId])];
+    const dbItems = await GameItem.find({ itemId: { $in: allIds } }).select('itemId name img').lean();
+    const imgLookup = {};
+    dbItems.forEach(i => { if (i.img) { imgLookup[i.itemId] = i.img; imgLookup[i.name] = i.img; } });
+
+    // Enrich result image
+    if (recipe.result) {
+      recipe.result.img = recipe.result.img || imgLookup[recipe.result.itemId] || imgLookup[recipe.result.name] || '';
+    }
+
     // Check hero inventory for ingredients
     const heroId = req.query.heroId;
-    let ingredientStatus = [];
+    let ingredientStatus = (recipe.ingredients || []).map(ing => ({
+      ...ing,
+      img: imgLookup[ing.itemId] || imgLookup[ing.name] || '',
+    }));
+
     if (heroId) {
       const hero = await Hero.findOne({ _id: heroId, userId: req.user.userId }).lean();
       if (hero) {
-        ingredientStatus = recipe.ingredients.map(ing => {
+        ingredientStatus = ingredientStatus.map(ing => {
           const owned = (hero.inventory || [])
             .filter(item => item.itemId === ing.itemId || item.name === ing.name)
             .reduce((sum, item) => sum + (item.quantity || 1), 0);
-          return {
-            ...ing,
-            owned,
-            hasEnough: owned >= ing.quantity,
-          };
+          return { ...ing, owned, hasEnough: owned >= ing.quantity };
         });
       }
     }
 
-    const canAffordSilver = heroId ? true : false; // will check in craft endpoint
-    res.json({ recipe, ingredientStatus, canAffordSilver });
+    res.json({ recipe, ingredientStatus });
   } catch (err) { next(err); }
 });
 
