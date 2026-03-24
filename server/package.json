@@ -1,0 +1,39 @@
+{
+  "name": "taloria-server",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "seed": "node scripts/seedGameData.js",
+    "seed:catalog": "node scripts/seedCatalog.js",
+    "set-admin": "node scripts/setAdmin.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dompurify": "^3.2.2",
+    "dotenv": "^16.4.5",
+    "express": "^5.0.1",
+    "express-rate-limit": "^7.4.1",
+    "ioredis": "^5.4.1",
+    "jsdom": "^25.0.1",
+    "jsondiffpatch": "^0.6.0",
+    "jsonwebtoken": "^9.0.2",
+    "marked": "^14.1.4",
+    "mongoose": "^8.8.3",
+    "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.8.1",
+    "uuid": "^10.0.0",
+    "winston": "^3.15.0",
+    "xss": "^1.0.15",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "socket.io-client": "^4.8.3"
+  }
+}

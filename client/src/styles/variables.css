@@ -1,0 +1,113 @@
+:root {
+  /* Background */
+  --bg: #0b0f15;
+  --bg-lighter: #101520;
+  --panel: rgba(16, 20, 30, 0.88);
+  --panel-solid: #131825;
+  --panel-hover: #181d2c;
+  --panel-border: rgba(255, 255, 255, 0.06);
+  --panel-border-hover: rgba(58, 204, 96, 0.25);
+
+  /* Gold */
+  --gold: #f6c86d;
+  --gold-dim: #c9a24e;
+  --gold-bright: #ffe08a;
+  --gold-bg: rgba(246, 200, 109, 0.08);
+  --gold-glow: rgba(246, 200, 109, 0.3);
+
+  /* CTA */
+  --cta: #3acc60;
+  --cta-dim: #2ea84d;
+  --cta-bright: #50e878;
+  --cta-glow: rgba(58, 204, 96, 0.3);
+
+  /* Functional */
+  --blue: #5b8fff;
+  --blue-dim: #4170dd;
+  --blue-bright: #7daaff;
+  --red: #ff4d4d;
+  --red-dim: #cc3333;
+  --green: #4dff88;
+  --green-dim: #33cc66;
+  --purple: #a855f7;
+  --purple-bright: #c084fc;
+  --orange: #ff8c42;
+  --teal: #22d3ee;
+
+  /* Rarity */
+  --rarity-common: #9D9D9D;
+  --rarity-uncommon: #1EFF00;
+  --rarity-rare: #0070FF;
+  --rarity-epic: #A335EE;
+  --rarity-legendary: #FF8000;
+
+  /* Text */
+  --text: #e8e6e0;
+  --text-dim: #9a9a9e;
+  --text-muted: #7a7a84;
+
+  /* Typography */
+  --font-heading: 'Cinzel', 'Georgia', serif;
+  --font-body: 'Montserrat', 'Inter', 'Segoe UI', sans-serif;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Border radius */
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-sm: 6px;
+
+  /* Max width */
+  --max-width: 1200px;
+}
+
+html {
+  font-size: max(14px, 10px + 0.3vw);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

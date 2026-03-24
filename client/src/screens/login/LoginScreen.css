@@ -1,0 +1,306 @@
+.login-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(80, 60, 30, 0.2), transparent 60%),
+    radial-gradient(ellipse at 50% 80%, rgba(40, 30, 15, 0.3), transparent 50%),
+    linear-gradient(180deg, #0a0d12 0%, #0f1318 40%, #0c0f15 100%);
+}
+
+/* ===== Particles ===== */
+.login-particles {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: rgba(246, 200, 109, 0.6);
+  border-radius: 50%;
+  opacity: 0;
+  animation: particleFloat 6s ease-in-out infinite;
+}
+
+@keyframes particleFloat {
+  0% { opacity: 0; transform: translateY(0) scale(0.5); }
+  15% { opacity: 0.7; }
+  85% { opacity: 0.2; }
+  100% { opacity: 0; transform: translateY(-100px) scale(1.2); }
+}
+
+/* ===== Gold WoW Frame ===== */
+.login-frame {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+  width: 92%;
+}
+
+.frame-diamond {
+  position: absolute;
+  z-index: 10;
+  color: #5ba3e6;
+  font-size: 18px;
+  filter: drop-shadow(0 0 8px rgba(91, 163, 230, 0.6));
+}
+
+.frame-diamond-top {
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.login-card {
+  background:
+    linear-gradient(180deg, rgba(18, 16, 12, 0.97) 0%, rgba(12, 10, 8, 0.98) 100%);
+  border: 2px solid;
+  border-image: linear-gradient(
+    180deg,
+    #c9a24e 0%,
+    #8b6914 20%,
+    #5a4410 40%,
+    #3d2e0a 60%,
+    #5a4410 80%,
+    #c9a24e 100%
+  ) 1;
+  padding: 48px 40px 36px;
+  text-align: center;
+  box-shadow:
+    0 0 60px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(201, 162, 78, 0.15),
+    inset 0 -1px 0 rgba(201, 162, 78, 0.08);
+}
+
+/* ===== Logo ===== */
+.login-logo {
+  margin-bottom: 20px;
+}
+
+.login-logo-img {
+  width: 220px;
+  height: auto;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.5));
+}
+
+.login-title {
+  font-family: var(--font-heading);
+  font-size: 3.2rem;
+  font-weight: 900;
+  color: #d4a84b;
+  letter-spacing: 0.2em;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    0 0 30px rgba(212, 168, 75, 0.15);
+  line-height: 1.1;
+}
+
+.login-subtitle {
+  color: rgba(180, 175, 165, 0.6);
+  font-size: 0.72rem;
+  margin-top: 10px;
+  letter-spacing: 0.25em;
+  font-weight: 400;
+  text-transform: uppercase;
+}
+
+/* ===== Divider ===== */
+.login-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 24px 0;
+  position: relative;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 162, 78, 0.4), transparent);
+}
+
+.login-rune {
+  color: #c9a24e;
+  font-size: 0.8rem;
+  margin: 0 16px;
+  opacity: 0.7;
+}
+
+/* ===== Description ===== */
+.login-description {
+  color: rgba(200, 195, 185, 0.65);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  margin-bottom: 32px;
+  max-width: 360px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ===== Buttons ===== */
+.login-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.login-buttons.hidden { display: none; }
+
+.login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 24px;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  border: none;
+}
+
+.login-btn-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.login-btn-telegram {
+  background: linear-gradient(135deg, #3acc60, #2ea84d);
+  color: white;
+  border: 2px solid rgba(58, 204, 96, 0.4);
+  box-shadow:
+    0 4px 20px rgba(58, 204, 96, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.login-btn-telegram:hover {
+  background: linear-gradient(135deg, #50e878, #3acc60);
+  box-shadow:
+    0 6px 30px rgba(58, 204, 96, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.login-btn-email {
+  background: transparent;
+  color: rgba(220, 215, 205, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.login-btn-email:hover {
+  border-color: rgba(58, 204, 96, 0.4);
+  color: #e8e6e0;
+  background: rgba(58, 204, 96, 0.05);
+  box-shadow: 0 0 20px rgba(58, 204, 96, 0.1);
+  transform: translateY(-1px);
+}
+
+/* ===== Form ===== */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-form.hidden { display: none; }
+
+.form-group { text-align: left; }
+.form-group.hidden { display: none; }
+
+.login-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: rgba(201, 162, 78, 0.4);
+  box-shadow: 0 0 0 2px rgba(201, 162, 78, 0.08);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.login-input::placeholder {
+  color: rgba(180, 175, 165, 0.35);
+}
+
+.login-link {
+  background: none;
+  border: none;
+  color: rgba(200, 195, 185, 0.5);
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 6px;
+  transition: color 0.2s;
+  font-family: var(--font-body);
+}
+
+.login-link:hover {
+  color: var(--gold);
+}
+
+/* ===== Error ===== */
+.login-error {
+  background: rgba(255, 77, 77, 0.08);
+  border: 1px solid rgba(255, 77, 77, 0.2);
+  color: #ff6b6b;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+.login-error.hidden { display: none; }
+
+/* ===== Invite ===== */
+.login-invite {
+  background: rgba(201, 162, 78, 0.06);
+  border: 1px solid rgba(201, 162, 78, 0.15);
+  color: #c9a24e;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  margin-top: 16px;
+}
+.login-invite.hidden { display: none; }
+
+/* ===== Footer ===== */
+.login-footer {
+  margin-top: 28px;
+  color: rgba(180, 175, 165, 0.35);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 520px) {
+  .login-card {
+    padding: 40px 24px 28px;
+  }
+  .login-title {
+    font-size: 2.4rem;
+  }
+  .login-logo-img {
+    width: 160px;
+  }
+  .login-subtitle {
+    font-size: 0.6rem;
+  }
+}

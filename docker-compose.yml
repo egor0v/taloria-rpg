@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: taloria-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: taloria
+
+  redis:
+    image: redis:7-alpine
+    container_name: taloria-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: taloria-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+      - redis
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongo:27017/taloria
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-taloria-production-secret-change-me}
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+    volumes:
+      - uploads-data:/app/uploads
+
+volumes:
+  mongo-data:
+  redis-data:
+  uploads-data:

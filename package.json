@@ -1,0 +1,22 @@
+{
+  "name": "taloria-rpg",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Taloria RPG - Cooperative online RPG with AI game master",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && nodemon index.js",
+    "dev:client": "cd client && npx vite",
+    "build:client": "cd client && npx vite build",
+    "start": "cd server && node index.js",
+    "seed": "cd server && node scripts/seedGameData.js",
+    "seed:catalog": "cd server && node scripts/seedCatalog.js",
+    "set-admin": "cd server && node scripts/setAdmin.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

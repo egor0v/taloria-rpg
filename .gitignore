@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.DS_Store
+*.log
+server/uploads/
+!server/uploads/.gitkeep
+client/dist/
+.vite/
+*.docx

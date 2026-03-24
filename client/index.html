@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Taloria RPG</title>
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="app">
+    <!-- Navigation -->
+    <nav id="top-nav" class="top-nav hidden">
+      <div class="nav-left">
+        <a href="/dashboard" class="nav-logo" data-link>
+          <span class="nav-logo-text">Taloria</span>
+        </a>
+        <div class="nav-links">
+          <a href="/dashboard" class="nav-item nav-item--active" data-link>ПЕРСОНАЖИ</a>
+          <a href="/inventory" class="nav-item" data-link>ИНВЕНТАРЬ</a>
+          <a href="/city" class="nav-item" data-link>ГОРОД</a>
+          <a href="/lavka" class="nav-item">ЛАВКА</a>
+          <a href="/bestiary" class="nav-item">БЕСТИАРИЙ</a>
+          <a href="/dashboard" class="nav-item" data-link>ПРОФИЛЬ</a>
+        </div>
+      </div>
+      <div class="nav-right">
+        <a href="/lavka#mint" class="nav-wallet" id="nav-wallet">
+          <span class="wallet-coin">Ⓣ</span>
+          <span id="wallet-amount">0</span>
+        </a>
+        <div class="nav-notifications" id="nav-notifications">
+          <span class="bell-icon">🔔</span>
+          <span class="badge hidden" id="notif-badge">0</span>
+        </div>
+        <div class="nav-avatar" id="nav-avatar">A</div>
+        <span class="nav-username" id="nav-username"></span>
+        <button class="nav-logout-btn" id="btn-logout">Выйти</button>
+      </div>
+    </nav>
+
+    <!-- Screen container -->
+    <main id="screen-container"></main>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

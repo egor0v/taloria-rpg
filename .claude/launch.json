@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "taloria-client",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd client && npx vite --host"],
+      "port": 5173
+    }
+  ]
+}
