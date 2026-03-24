@@ -515,7 +515,7 @@ async function loadShopItems(locationId: string, tab: string) {
         const canAfford = (currentHero?.silver || 0) >= price;
         return `
           <div class="shop-item">
-            <div class="shop-item-icon">${getShopItemEmoji(item.type)}</div>
+            <div class="shop-item-icon">${item.img ? `<img src="${item.img}" class="shop-item-img" alt="" />` : getShopItemEmoji(item.type)}</div>
             <div class="shop-item-info">
               <span class="shop-item-name" style="color:${color}">${item.name}</span>
               <span class="shop-item-type">${rarityNames[item.rarity] || 'Обычный'}${item.source === 'player' ? ' · от игрока' : ''}</span>
@@ -574,7 +574,7 @@ async function loadShopItems(locationId: string, tab: string) {
       const sellPrice = SELL_PRICES[item.rarity] || 1;
       return `
         <div class="shop-item">
-          <div class="shop-item-icon">${getShopItemEmoji(item.type)}</div>
+          <div class="shop-item-icon">${item.img ? `<img src="${item.img}" class="shop-item-img" alt="" />` : getShopItemEmoji(item.type)}</div>
           <div class="shop-item-info">
             <span class="shop-item-name" style="color:${color}">${item.name}${(item.quantity || 1) > 1 ? ` (×${item.quantity})` : ''}</span>
             <span class="shop-item-type">${item.type || ''} · ${rarityNames[item.rarity] || 'Обычный'}</span>
