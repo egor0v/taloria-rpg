@@ -110,7 +110,7 @@
 /* Fog of war — must cover the parent's background image */
 .fog-hidden { background: #0a0806 !important; cursor: default; pointer-events: none; }
 .fog-explored { position: relative; }
-.fog-explored::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.55); pointer-events: none; }
+.fog-explored::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.5); pointer-events: none; z-index: 2; }
 
 /* ─── TOKENS ─── */
 .token { width: 32px; height: 32px; border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }

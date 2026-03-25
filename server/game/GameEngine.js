@@ -1935,22 +1935,34 @@ class GameEngine {
 
   _updateFogForHero(hero) {
     if (!this.gs.fog || !hero) return;
-    const vision = hero.vision || 4;
+    const FULL_VISION = 5;    // fully visible radius
+    const PARTIAL_VISION = 4; // additional semi-transparent radius
+    const totalRadius = FULL_VISION + PARTIAL_VISION; // 9
     const ROWS = this.gs.map.length;
     const COLS = this.gs.map[0]?.length || 0;
 
-    // First, set previously visible cells to explored (for all heroes' combined vision)
-    // Then reveal around current hero
-    for (let r = hero.row - vision; r <= hero.row + vision; r++) {
-      for (let c = hero.col - vision; c <= hero.col + vision; c++) {
-        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
-        const dist = Math.abs(r - hero.row) + Math.abs(c - hero.col);
-        if (dist <= vision) {
-          this.gs.fog[r][c] = 2; // FOG_VISIBLE
-          // Discover monsters
-          this.gs.monsters.forEach(m => {
-            if (m.row === r && m.col === c && m.alive) m.discovered = true;
-          });
+    // Downgrade previous fully-visible (2) to explored (1) — but never back to hidden (0)
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (this.gs.fog[r][c] === 2) this.gs.fog[r][c] = 1;
+      }
+    }
+
+    // Reveal around ALL alive heroes
+    for (const h of this.gs.heroes) {
+      if (!h.alive && h.hp <= 0) continue;
+      for (let r = h.row - totalRadius; r <= h.row + totalRadius; r++) {
+        for (let c = h.col - totalRadius; c <= h.col + totalRadius; c++) {
+          if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+          const dist = Math.abs(r - h.row) + Math.abs(c - h.col);
+          if (dist <= FULL_VISION) {
+            this.gs.fog[r][c] = 2; // fully visible
+            this.gs.monsters.forEach(m => {
+              if (m.row === r && m.col === c && m.alive) m.discovered = true;
+            });
+          } else if (dist <= totalRadius && this.gs.fog[r][c] < 1) {
+            this.gs.fog[r][c] = 1; // semi-transparent (explored)
+          }
         }
       }
     }
@@ -2597,19 +2609,22 @@ function _spawnBonusContent(gs, ROWS, COLS) {
 
 // ── Helper: compute initial fog of war ──
 function _computeInitialFog(gs, ROWS, COLS) {
+  const FULL_VISION = 5;
+  const PARTIAL_VISION = 4;
+  const totalRadius = FULL_VISION + PARTIAL_VISION;
+
   for (const hero of gs.heroes) {
-    const vision = hero.vision || 4;
-    for (let r = hero.row - vision; r <= hero.row + vision; r++) {
-      for (let c = hero.col - vision; c <= hero.col + vision; c++) {
+    for (let r = hero.row - totalRadius; r <= hero.row + totalRadius; r++) {
+      for (let c = hero.col - totalRadius; c <= hero.col + totalRadius; c++) {
         if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
         const dist = Math.abs(r - hero.row) + Math.abs(c - hero.col);
-        if (dist <= vision) {
-          gs.fog[r][c] = 2; // FOG_VISIBLE
-
-          // Discover monsters in visibility range
+        if (dist <= FULL_VISION) {
+          gs.fog[r][c] = 2; // fully visible
           gs.monsters.forEach(m => {
             if (m.row === r && m.col === c) m.discovered = true;
           });
+        } else if (dist <= totalRadius) {
+          gs.fog[r][c] = 1; // semi-transparent
         }
       }
     }
