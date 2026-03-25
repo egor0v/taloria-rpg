@@ -109,7 +109,9 @@ export async function renderScenario(container: HTMLElement): Promise<void> {
         if (!selectedHero) return alert('Сначала создайте героя');
         try {
           const data = await api.post('/api/sessions', { scenarioId: selectedScenarioId, heroId: selectedHero._id, maxPlayers: 1 });
-          sessionStorage.setItem('current_session', JSON.stringify(data.session));
+          // Set to playing immediately for solo
+          await api.patch(`/api/sessions/${data.session._id}/status`, { status: 'playing' });
+          sessionStorage.setItem('current_session', JSON.stringify({ ...data.session, status: 'playing' }));
           navigateTo('/game');
         } catch (err: any) { alert(err.error || 'Ошибка'); }
       });

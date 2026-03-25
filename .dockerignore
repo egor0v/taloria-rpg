@@ -1,0 +1,10 @@
+node_modules
+client/node_modules
+client/src
+client/vite.config.ts
+client/tsconfig.json
+client/package*.json
+.git
+.claude
+.env
+*.md

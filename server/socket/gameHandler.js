@@ -183,7 +183,19 @@ function setupGameHandler(io) {
     });
 
     // --- Action request ---
-    socket.on('action-request', async ({ sessionId: reqSessionId, action }) => {
+    socket.on('action-request', async (data) => {
+      // Support both { sessionId, action } and flat { type, x, y, ... }
+      let action, reqSessionId;
+      if (data.action) {
+        action = data.action;
+        reqSessionId = data.sessionId;
+      } else {
+        // Flat format from client: { type, x, y, targetId, ... }
+        action = { ...data };
+        reqSessionId = data.sessionId;
+        delete action.sessionId;
+      }
+
       const sessionId = reqSessionId || socket.sessionId;
       if (!sessionId) return socket.emit('action-error', { error: 'Не в сессии' });
 
@@ -211,9 +223,20 @@ function setupGameHandler(io) {
         const players = session?.players || [];
         const engine = getOrCreateEngine(sessionId, gs, players);
 
-        // Validate action ownership
         const userId = socket.userId;
         const actionType = action.type;
+
+        // Auto-assign heroId from session ownership
+        if (!action.heroId) {
+          const myHero = gs.heroes.find(h => h._ownerId === userId || h.userId === userId);
+          if (myHero) action.heroId = myHero.id;
+        }
+
+        // Translate client x/y coordinates to engine row/col
+        if (actionType === 'move') {
+          if (action.y !== undefined) action.targetRow = action.y;
+          if (action.x !== undefined) action.targetCol = action.x;
+        }
 
         // Process action through engine
         let result;
@@ -225,7 +248,12 @@ function setupGameHandler(io) {
           if (!validation.ok) {
             return socket.emit('action-error', { error: validation.error });
           }
-          result = engine.processAction(userId, action);
+          const processed = engine.processAction(userId, action);
+          // processAction returns { result: {...} } or { error: '...' }
+          if (processed.error) {
+            return socket.emit('action-error', { error: processed.error });
+          }
+          result = processed.result || processed;
         }
 
         // Update state

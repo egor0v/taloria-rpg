@@ -49,7 +49,7 @@ export function renderGameScreen(container: HTMLElement): void {
     log(fmtAction(data));
     if (data.gameState) { gs = data.gameState; onUpdate(); }
   });
-  sock.on('action-error', (data: any) => log(`❌ ${data.message}`, 'error'));
+  sock.on('action-error', (data: any) => log(`❌ ${data.error || data.message || 'Ошибка'}`, 'error'));
   sock.on('ai-narration', (data: any) => { setNarration(data.text); log(`📜 ${data.text}`, 'narration'); });
   sock.on('chat-message', (data: any) => addChat(data.displayName, data.text, data.userId === user?._id));
   sock.on('player-connected', (data: any) => log(`👤 ${data.displayName} подключился`, 'system'));
@@ -186,6 +186,17 @@ function buildHTML(isSolo: boolean): string {
       <button class="popup-close" id="interact-close">Отмена</button>
     </div>
   </div>
+
+  <!-- Full Inventory overlay -->
+  <div class="game-inv-overlay" id="inventory-overlay" style="display:none">
+    <div class="game-inv-panel">
+      <div class="game-inv-header">
+        <h3 class="game-inv-title">ИНВЕНТАРЬ</h3>
+        <button class="game-inv-close" id="inv-overlay-close">✕</button>
+      </div>
+      <div class="game-inv-body" id="game-inv-body"></div>
+    </div>
+  </div>
 </div>`;
 }
 
@@ -201,26 +212,30 @@ function onUpdate() {
 
 function updateHUD() {
   const el = (id: string) => document.getElementById(id);
+  if (!el('round-num')) return; // Guard against unmounted DOM
   el('round-num')!.textContent = String(gs.round || 0);
   const modeEl = el('mode-display')!;
   modeEl.textContent = gs.mode === 'combat' ? 'Бой' : 'Исследование';
   modeEl.className = gs.mode === 'combat' ? 'mode-combat' : 'mode-explore';
 
   const myHero = getMyHero();
-  el('move-badge')!.textContent = String(myHero?.stepsRemaining || 0);
-  el('gold-display')!.textContent = String(myHero?.silver || 0);
+  el('move-badge')!.textContent = String(myHero?.stepsRemaining || myHero?.moveRange || 0);
+  el('gold-display')!.textContent = String(myHero?.silver || myHero?.gold || 0);
 
   // Turn name
   const turnEl = el('turn-name')!;
-  if (gs.turnOrder?.length) {
+  if (gs.turnOrder?.length && gs.mode === 'combat') {
     const cur = gs.turnOrder[gs.currentTurnIdx];
     const entity = cur?.type === 'hero'
-      ? gs.heroes.find((h: any) => h.entityId === cur.entityId)
-      : gs.monsters.find((m: any) => m.entityId === cur.entityId);
+      ? gs.heroes.find((h: any) => h.id === cur.entityId || h.entityId === cur.entityId)
+      : gs.monsters.find((m: any) => m.id === cur.entityId || m.entityId === cur.entityId);
     turnEl.textContent = entity?.name || '—';
     turnEl.className = `game-turn-name ${cur?.type === 'hero' ? 'turn-hero' : 'turn-monster'}`;
   } else {
-    turnEl.textContent = myHero?.name || user?.displayName || '—';
+    // Explore mode — show active hero
+    const activeHero = gs.heroes?.[gs.activeHeroIdx || 0];
+    turnEl.textContent = activeHero?.name || myHero?.name || user?.displayName || '—';
+    turnEl.className = 'game-turn-name turn-hero';
   }
 }
 
@@ -231,7 +246,10 @@ function renderMap() {
   const mapEl = document.getElementById('game-map');
   if (!mapEl || !gs?.map) return;
 
-  const { map, heroes, monsters, fog, mapWidth, mapHeight, terrain, bgImage, objects, npcs } = gs;
+  const { map, heroes, monsters, fog, terrain, bgImage, objects, npcs } = gs;
+  // mapWidth/mapHeight from server, or derive from map array
+  const mapHeight = gs.mapHeight || map.length;
+  const mapWidth = gs.mapWidth || (map[0]?.length || 1);
   const myHero = getMyHero();
 
   let html = `<div class="tactical-grid" style="grid-template-columns:repeat(${mapWidth},var(--cell-size,40px));${bgImage ? `background-image:url(${bgImage});background-size:cover;` : ''}">`;
@@ -242,15 +260,17 @@ function renderMap() {
       const road = terrain?.[y]?.[x];
       const fogV = fog?.[y]?.[x] ?? 2;
       const isWall = cell === 0 || cell === 'wall';
-      const isWater = cell === 3 || cell === 'water';
+      const isWater = cell === 3 || cell === 'water' || road === 'water';
       const isRoad = cell === 1 || road === 1 || road === 'road';
       const isOffroad = cell === 2 || road === 2 || road === 'offroad';
 
-      const hero = heroes?.find((h: any) => h.alive && h.x === x && h.y === y);
-      const monster = monsters?.find((m: any) => m.alive && m.x === x && m.y === y);
+      // Server uses row/col; row=y, col=x
+      const hero = heroes?.find((h: any) => h.alive !== false && h.hp > 0 && (h.col === x && h.row === y));
+      const monster = monsters?.find((m: any) => m.alive && (m.col === x && m.row === y));
       const showMonster = monster && (monster.discovered || fogV === 2);
-      const obj = objects?.find((o: any) => o.x === x && o.y === y && o.discovered && !o.opened && !o.triggered);
-      const npc = npcs?.find((n: any) => n.x === x && n.y === y);
+      const obj = objects?.find((o: any) => (o.col === x && o.row === y) && (o.discovered !== false) && !o.opened && !o.triggered);
+      // Friendly NPCs are stored in monsters array with friendly=true
+      const friendlyNpc = !hero && !showMonster ? monsters?.find((n: any) => n.friendly && n.alive && n.col === x && n.row === y) : null;
 
       let cls = 'map-cell';
       if (isWall) cls += ' cell-wall';
@@ -259,38 +279,41 @@ function renderMap() {
       else if (isOffroad) cls += ' cell-offroad';
       else cls += ' cell-floor';
 
-      if (fogV === 0) cls += ' fog-hidden';
-      else if (fogV === 1) cls += ' fog-explored';
+      // Walls are always visible (just impassable), fog only hides floor cells
+      if (!isWall) {
+        if (fogV === 0) cls += ' fog-hidden';
+        else if (fogV === 1) cls += ' fog-explored';
+      }
 
       // Highlights
       if (myHero && actionMode === 'move' && !isWall && fogV > 0) {
-        const dist = Math.abs(myHero.x - x) + Math.abs(myHero.y - y);
+        const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
         if (dist > 0 && dist <= (myHero.stepsRemaining || 0) && !hero && !showMonster) cls += ' cell-reachable';
       }
       if (myHero && actionMode === 'attack' && showMonster) {
-        const dist = Math.abs(myHero.x - x) + Math.abs(myHero.y - y);
-        const range = myHero.equipment?.weapon?.range || 1;
+        const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
+        const range = myHero.equipment?.weapon?.attackRange || myHero.equipment?.weapon?.range || 1;
         if (dist <= range) cls += ' cell-attackable';
       }
 
       let content = '';
       if (hero) {
-        const isMe = hero.userId === user?._id;
+        const isMe = hero._ownerId === user?._id || hero.userId === user?._id;
         const portrait = `/uploads/heroes/${hero.race}-${hero.gender}-${hero.cls}.png`;
         content = `<div class="token token-hero ${isMe ? 'token-mine' : ''}" title="${hero.name} HP:${hero.hp}/${hero.maxHp}">
           <img src="${portrait}" class="token-img" alt="" onerror="this.style.display='none';this.parentElement.textContent='🧙'" />
           <span class="token-hp-bar" style="width:${Math.round(hero.hp / hero.maxHp * 100)}%"></span>
         </div>`;
-      } else if (showMonster) {
+      } else if (showMonster && !monster.friendly) {
         content = `<div class="token token-monster" title="${monster.name} HP:${monster.hp}/${monster.maxHp}">
           ${monster.tokenImg ? `<img src="${monster.tokenImg}" class="token-img" alt="" />` : '👹'}
           <span class="token-hp-bar token-hp-monster" style="width:${Math.round(monster.hp / monster.maxHp * 100)}%"></span>
         </div>`;
+      } else if (friendlyNpc && fogV >= 2) {
+        content = `<span class="token-object token-npc" title="${friendlyNpc.name}">${friendlyNpc.label || '🧝'}</span>`;
       } else if (obj && fogV >= 2) {
         const icons: Record<string, string> = { chest: '📦', trap: '⚡', rune: '🔮', questNpc: '❗' };
         content = `<span class="token-object" title="${obj.name || obj.type}">${icons[obj.type] || '❓'}</span>`;
-      } else if (npc && fogV >= 2) {
-        content = `<span class="token-object" title="${npc.name}">🧝</span>`;
       }
 
       html += `<div class="${cls}" data-x="${x}" data-y="${y}">${content}</div>`;
@@ -310,7 +333,7 @@ function renderMap() {
 
   // Auto-scroll to hero
   if (myHero) {
-    const heroCell = mapEl.querySelector(`[data-x="${myHero.x}"][data-y="${myHero.y}"]`);
+    const heroCell = mapEl.querySelector(`[data-x="${myHero.col}"][data-y="${myHero.row}"]`);
     heroCell?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   }
 }
@@ -320,35 +343,35 @@ function onCellClick(x: number, y: number) {
   const myHero = getMyHero();
   if (!myHero) return;
 
-  // Click on monster → attack
-  const monster = gs.monsters?.find((m: any) => m.alive && m.discovered && m.x === x && m.y === y);
+  // Click on hostile monster → attack (row=y, col=x)
+  const monster = gs.monsters?.find((m: any) => m.alive && !m.friendly && m.discovered && m.col === x && m.row === y);
   if (monster && (actionMode === 'attack' || actionMode === 'move')) {
     sock.emit('action-request', { type: 'attack', targetId: monster.entityId || monster.id });
     return;
   }
 
+  // Click on friendly NPC/monster → interact
+  const friendlyNpc = gs.monsters?.find((m: any) => m.alive && m.friendly && m.col === x && m.row === y);
+  if (friendlyNpc) {
+    sock.emit('action-request', { type: 'interact', targetId: friendlyNpc.id });
+    return;
+  }
+
   // Click on object → interact
-  const obj = gs.objects?.find((o: any) => o.x === x && o.y === y && o.discovered && !o.opened && !o.triggered);
+  const obj = gs.objects?.find((o: any) => o.col === x && o.row === y && (o.discovered !== false) && !o.opened && !o.triggered);
   if (obj) {
     sock.emit('action-request', { type: 'interact', targetId: obj.id });
     return;
   }
 
-  // Click on NPC → interact
-  const npc = gs.npcs?.find((n: any) => n.x === x && n.y === y);
-  if (npc) {
-    sock.emit('action-request', { type: 'interact', targetId: npc.id });
-    return;
-  }
-
   // Click on dead monster → loot
-  const corpse = gs.monsters?.find((m: any) => !m.alive && !m.looted && m.x === x && m.y === y);
+  const corpse = gs.monsters?.find((m: any) => !m.alive && !m.looted && m.col === x && m.row === y);
   if (corpse) {
     sock.emit('action-request', { type: 'loot', objectId: corpse.id });
     return;
   }
 
-  // Move
+  // Move (send x/y, server translates to targetRow/targetCol)
   if (actionMode === 'move') {
     sock.emit('action-request', { type: 'move', x, y });
   }
@@ -361,11 +384,11 @@ function renderTeam() {
   const panel = document.getElementById('team-panel');
   if (!panel || !gs?.heroes) return;
 
-  panel.innerHTML = gs.heroes.filter((h: any) => h.alive).map((h: any) => {
+  panel.innerHTML = gs.heroes.filter((h: any) => h.alive !== false && h.hp > 0).map((h: any) => {
     const hpPct = Math.round(h.hp / h.maxHp * 100);
     const mpPct = Math.round(h.mp / h.maxMp * 100);
     const portrait = `/uploads/heroes/${h.race}-${h.gender}-${h.cls}.png`;
-    const isMe = h.userId === user?._id;
+    const isMe = h._ownerId === user?._id || h.userId === user?._id;
     const isTurn = gs.turnOrder?.[gs.currentTurnIdx]?.entityId === h.entityId;
     const statuses = (h.statusEffects || []).map((s: any) => `<span class="status-icon" title="${s.name}">${statusIcon(s.type)}</span>`).join('');
 
@@ -434,32 +457,178 @@ function showAbilityPopup() {
 }
 
 function showItemPopup() {
-  const popup = document.getElementById('item-popup')!;
-  const list = document.getElementById('item-list')!;
+  showInventoryOverlay();
+}
+
+// ═══════════════════════════════════
+// IN-GAME INVENTORY OVERLAY
+// ═══════════════════════════════════
+const STAT_LABELS: Record<string, string> = { attack: 'СИЛ', agility: 'ЛОВ', armor: 'ВЫН', intellect: 'ИНТ', wisdom: 'МУД', charisma: 'ХАР' };
+const EQUIP_SLOT_NAMES: Record<string, string> = { weapon: 'ОРУЖИЕ', shield: 'ЩИТ', helmet: 'ШЛЕМ', cloak: 'ПЛАЩ', armor: 'БРОНЯ', pants: 'ШТАНЫ', boots: 'ОБУВЬ', gloves: 'ПРЕДМЕТ', ring: 'КОЛЬЦО', amulet: 'АМУЛЕТ' };
+const RARITY_NAMES: Record<string, string> = { common: 'Обычный', uncommon: 'Необычный', rare: 'Редкий', epic: 'Эпический', legendary: 'Легендарный' };
+const RARITY_COLORS: Record<string, string> = { common: '#9a9a9e', uncommon: '#3acc60', rare: '#5b8fff', epic: '#a855f7', legendary: '#f6c86d' };
+
+function itemEmoji(type: string): string {
+  const m: Record<string, string> = { weapon: '⚔️', armor: 'armor' ? '🛡️' : '🛡️', helmet: '⛑️', boots: '👢', shield: '🛡️', ring: '💍', amulet: '📿', potion: '🧪', scroll: '📜', food: '🍖', tool: '🔧', junk: '🗑️', quest: '❗' };
+  return m[type] || '📦';
+}
+
+function showInventoryOverlay() {
+  const overlay = document.getElementById('inventory-overlay')!;
+  const body = document.getElementById('game-inv-body')!;
   const hero = getMyHero();
   if (!hero) return;
 
-  const usable = (hero.inventory || []).filter((i: any) => i.usable || ['potion', 'scroll', 'food', 'tool'].includes(i.type));
-  list.innerHTML = usable.map((item: any, idx: number) => `
-    <div class="item-option" data-idx="${idx}">
-      <span>${item.img ? `<img src="${item.img}" class="item-opt-img" />` : '📦'}</span>
-      <div class="item-opt-info">
-        <div class="item-opt-name">${item.name}</div>
-        <div class="ability-opt-desc">${item.description || ''}</div>
-      </div>
-      ${(item.quantity || 1) > 1 ? `<span class="item-opt-qty">x${item.quantity}</span>` : ''}
-    </div>
-  `).join('') || '<p style="color:var(--text-dim)">Нет предметов</p>';
+  const equipment = hero.equipment || {};
+  const inventory = hero.inventory || [];
+  const isCombat = gs?.mode === 'combat';
 
-  popup.style.display = 'flex';
-  list.querySelectorAll('.item-option').forEach(el => {
+  // Calc stats
+  const statKeys = ['attack', 'agility', 'armor', 'intellect', 'wisdom', 'charisma'];
+
+  const slotRows = [['weapon', 'shield'], ['helmet', 'cloak'], ['armor', 'pants'], ['boots', 'gloves'], ['ring', 'amulet']];
+
+  body.innerHTML = `
+    <div class="ginv-layout">
+      <!-- Top row: Left = portrait+stats, Right = equipment -->
+      <div class="ginv-top-row">
+        <!-- Left: Portrait + Stats -->
+        <div class="ginv-left">
+          <div class="ginv-portrait" style="background-image: url('/uploads/heroes/${hero.race}-${hero.gender}-${hero.cls}.png')"></div>
+          <div class="ginv-info-block">
+            <div class="ginv-hero-info">
+              <div class="ginv-hero-name">${hero.name}</div>
+              <div class="ginv-hero-meta">Ур.${hero.level}</div>
+            </div>
+            <div class="ginv-bars">
+              <div class="ginv-bar"><span class="ginv-bar-label">HP</span><div class="ginv-bar-track ginv-bar--hp"><div class="ginv-bar-fill" style="width:${Math.round(hero.hp / hero.maxHp * 100)}%"></div></div><span class="ginv-bar-val">${hero.hp}/${hero.maxHp}</span></div>
+              <div class="ginv-bar"><span class="ginv-bar-label">MP</span><div class="ginv-bar-track ginv-bar--mp"><div class="ginv-bar-fill" style="width:${Math.round(hero.mp / hero.maxMp * 100)}%"></div></div><span class="ginv-bar-val">${hero.mp}/${hero.maxMp}</span></div>
+            </div>
+            <div class="ginv-stats">
+              ${statKeys.map(key => {
+                const val = hero[key] || 0;
+                return `<div class="ginv-stat"><span class="ginv-stat-label">${STAT_LABELS[key]}</span><span class="ginv-stat-val">${val}</span></div>`;
+              }).join('')}
+            </div>
+            <div class="ginv-coins">
+              <span>🪙 ${hero.gold || 0}</span>
+              <span>🥈 ${hero.silver || 0}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Equipment + Preview -->
+        <div class="ginv-right-top">
+          <h4 class="ginv-section-title">ЭКИПИРОВКА</h4>
+          <div class="ginv-equip-and-preview">
+            <div class="ginv-equip-grid">
+              ${slotRows.map(row => row.map(slot => {
+                const item = equipment[slot];
+                const rarCls = item?.rarity ? `ginv-slot--${item.rarity}` : '';
+                return `<div class="ginv-equip-slot ${item?.name ? 'ginv-slot--filled' : ''} ${rarCls}" data-slot="${slot}" data-item='${item?.name ? JSON.stringify(item) : ''}'>
+                  ${item?.img ? `<img src="${item.img}" class="ginv-equip-img" />` :
+                    item?.name ? `<div class="ginv-equip-text">${item.name.slice(0, 8)}</div>` :
+                    `<span class="ginv-slot-label">${EQUIP_SLOT_NAMES[slot]}</span>`}
+                </div>`;
+              }).join('')).join('')}
+            </div>
+            <div class="ginv-preview" id="ginv-preview">
+              <p class="ginv-preview-hint">Нажмите на предмет для просмотра</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom: Inventory Grid -->
+      <div class="ginv-bottom">
+        <h4 class="ginv-section-title">ИНВЕНТАРЬ <span class="ginv-count">${inventory.length} предм.</span></h4>
+        <div class="ginv-grid">
+          ${inventory.map((item: any, idx: number) => {
+            const rarCls = item.rarity ? `ginv-item--${item.rarity}` : '';
+            return `<div class="ginv-item ${rarCls}" data-idx="${idx}" data-item='${JSON.stringify(item)}' data-source="inventory" title="${item.name || ''}">
+              ${item.img ? `<img src="${item.img}" class="ginv-item-img" />` : `<span class="ginv-item-emoji">${itemEmoji(item.type)}</span>`}
+              ${(item.quantity || 1) > 1 ? `<span class="ginv-item-qty">${item.quantity}</span>` : ''}
+            </div>`;
+          }).join('')}
+          ${Array(Math.max(0, 35 - inventory.length)).fill('<div class="ginv-item ginv-item--empty"></div>').join('')}
+        </div>
+        ${isCombat ? '<p class="ginv-hint">В бою: экипировка стоит действие</p>' : '<p class="ginv-hint">Исследование: экипировка бесплатно</p>'}
+      </div>
+    </div>
+  `;
+
+  overlay.style.display = 'flex';
+
+  // Close
+  document.getElementById('inv-overlay-close')?.addEventListener('click', () => { overlay.style.display = 'none'; });
+  overlay.addEventListener('click', (e) => { if ((e.target as HTMLElement).id === 'inventory-overlay') overlay.style.display = 'none'; });
+
+  // Item click → preview
+  body.querySelectorAll('.ginv-item[data-item]').forEach(el => {
     el.addEventListener('click', () => {
-      const invIdx = (hero.inventory || []).findIndex((i: any) => i.usable || ['potion', 'scroll', 'food', 'tool'].includes(i.type));
-      sock?.emit('action-request', { type: 'use-item', itemIndex: parseInt((el as HTMLElement).dataset.idx!) });
-      popup.style.display = 'none';
+      try {
+        const item = JSON.parse((el as HTMLElement).dataset.item || '{}');
+        const idx = parseInt((el as HTMLElement).dataset.idx || '0');
+        showInGameItemPreview(item, 'inventory', idx);
+      } catch {}
     });
   });
-  document.getElementById('item-close')?.addEventListener('click', () => { popup.style.display = 'none'; });
+
+  // Equip slot click → preview
+  body.querySelectorAll('.ginv-equip-slot[data-item]').forEach(el => {
+    el.addEventListener('click', () => {
+      try {
+        const itemStr = (el as HTMLElement).dataset.item;
+        if (itemStr) {
+          const item = JSON.parse(itemStr);
+          if (item.name) showInGameItemPreview(item, 'equipment', 0);
+        }
+      } catch {}
+    });
+  });
+}
+
+function showInGameItemPreview(item: any, source: string, idx: number) {
+  const el = document.getElementById('ginv-preview');
+  if (!el) return;
+
+  const isUsable = item.usable || ['potion', 'scroll', 'food', 'tool'].includes(item.type);
+  const canEquip = item.slot && source === 'inventory';
+  const canUnequip = source === 'equipment';
+
+  el.innerHTML = `
+    <div class="ginv-preview-card">
+      <div class="ginv-preview-header">
+        ${item.img ? `<img src="${item.img}" class="ginv-preview-img" />` : `<span class="ginv-preview-emoji">${itemEmoji(item.type)}</span>`}
+        <div>
+          <div class="ginv-preview-name" style="color:${RARITY_COLORS[item.rarity] || '#e8e6e0'}">${item.name || 'Предмет'}</div>
+          <div class="ginv-preview-rarity">${RARITY_NAMES[item.rarity] || ''} ${item.type || ''}</div>
+        </div>
+      </div>
+      ${item.description ? `<p class="ginv-preview-desc">${item.description}</p>` : ''}
+      ${item.damage ? `<p class="ginv-preview-stat">Урон: ${item.damage.die || item.damageDie || '?'}${item.damage.bonus ? '+' + item.damage.bonus : ''}</p>` : ''}
+      ${item.range || item.attackRange ? `<p class="ginv-preview-stat">Дальность: ${item.range || item.attackRange}</p>` : ''}
+      ${item.stats ? `<p class="ginv-preview-stat">${Object.entries(item.stats).map(([k, v]) => `${STAT_LABELS[k] || k}: +${v}`).join(', ')}</p>` : ''}
+      ${item.weight ? `<p class="ginv-preview-stat">Вес: ${item.weight} кг</p>` : ''}
+      <div class="ginv-preview-actions">
+        ${isUsable && source === 'inventory' ? `<button class="ginv-action-btn ginv-action-use" data-idx="${idx}">🧪 Использовать</button>` : ''}
+        ${canEquip ? `<button class="ginv-action-btn ginv-action-equip" data-idx="${idx}" data-slot="${item.slot}">⬆ Экипировать</button>` : ''}
+        ${canUnequip ? `<button class="ginv-action-btn ginv-action-unequip">⬇ Снять</button>` : ''}
+      </div>
+    </div>
+  `;
+
+  // Use item in game
+  el.querySelector('.ginv-action-use')?.addEventListener('click', () => {
+    sock?.emit('action-request', { type: 'use-item', itemIndex: idx });
+    document.getElementById('inventory-overlay')!.style.display = 'none';
+  });
+
+  // Equip (in explore mode — free; in combat — costs action)
+  el.querySelector('.ginv-action-equip')?.addEventListener('click', () => {
+    sock?.emit('action-request', { type: 'equip', itemIndex: idx, slot: item.slot });
+    document.getElementById('inventory-overlay')!.style.display = 'none';
+  });
 }
 
 function showInteractPopup() {
@@ -576,7 +745,9 @@ function applyZoom() {
 // ═══════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════
-function getMyHero() { return gs?.heroes?.find((h: any) => h.userId === user?._id); }
+function getMyHero() {
+  return gs?.heroes?.find((h: any) => h._ownerId === user?._id || h.userId === user?._id);
+}
 
 function setNarration(text: string) {
   const el = document.getElementById('narration-text');
@@ -595,8 +766,9 @@ function log(text: string, type = 'normal') {
 
 function fmtAction(data: any): string {
   const r = data.result || {};
-  switch (r.type || data.action?.type) {
-    case 'move': return `➡ ${r.heroName || 'Герой'} → (${r.to?.x},${r.to?.y})${r.trap ? ' ⚡Ловушка! -' + r.trap.damage + 'HP' : ''}${r.encounter ? ' 👹 ' + r.encounter.monsterName + '!' : ''}`;
+  const rType = r.type || data.action?.type;
+  switch (rType) {
+    case 'move': return `➡ ${r.heroName || 'Герой'} → (${r.toCol ?? r.to?.x ?? '?'},${r.toRow ?? r.to?.y ?? '?'})${r.trap ? ' ⚡Ловушка! -' + r.trap.damage + 'HP' : ''}${r.encounter ? ' 👹 Встреча!' : ''}`;
     case 'attack': {
       if (r.dodged) return `🤸 ${r.targetName} уклонился!`;
       if (r.isMiss) return `❌ ${r.heroName} промах (d20=1)`;

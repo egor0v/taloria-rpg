@@ -96,17 +96,17 @@ app.use('/api/health', require('./routes/health'));
 if (config.nodeEnv === 'production') {
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
 
-  app.get('/lavka', (req, res) => res.sendFile(path.join(clientDist, 'lavka.html')));
-  app.get('/lavka/*', (req, res) => res.sendFile(path.join(clientDist, 'lavka.html')));
-  app.get('/bestiary', (req, res) => res.sendFile(path.join(clientDist, 'bestiary.html')));
-  app.get('/bestiary/*', (req, res) => res.sendFile(path.join(clientDist, 'bestiary.html')));
-  app.get('/admin', (req, res) => res.sendFile(path.join(clientDist, 'admin.html')));
-  app.get('/admin/*', (req, res) => res.sendFile(path.join(clientDist, 'admin.html')));
+  // SPA sub-app routes (Express 5 compatible)
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/uploads')) return next();
+    if (req.path.match(/\.\w+$/)) return next(); // skip static files
 
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io') && !req.path.startsWith('/uploads')) {
-      res.sendFile(path.join(clientDist, 'index.html'));
-    }
+    if (req.path.startsWith('/lavka')) return res.sendFile(path.join(clientDist, 'lavka.html'));
+    if (req.path.startsWith('/bestiary')) return res.sendFile(path.join(clientDist, 'bestiary.html'));
+    if (req.path.startsWith('/admin')) return res.sendFile(path.join(clientDist, 'admin.html'));
+
+    res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
 

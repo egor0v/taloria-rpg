@@ -111,23 +111,41 @@ class GameEngine {
    * Полная валидация действия (10-point checklist)
    */
   validateAction(userId, action) {
-    const currentTurn = this.gs.turnOrder[this.gs.currentTurnIdx];
-    if (!currentTurn) return { ok: false, error: 'Нет активного хода' };
+    let hero;
 
-    // 1. Принадлежит ли юнит игроку?
-    if (currentTurn.type !== 'hero') return { ok: false, error: 'Сейчас ход монстра' };
-    const hero = this.findHero(action.heroId || currentTurn.entityId);
-    if (!hero) return { ok: false, error: 'Герой не найден' };
-    // Strict ownership check — no wildcard access in multiplayer
-    if (hero._ownerId && hero._ownerId !== userId) return { ok: false, error: 'Не ваш герой' };
-    // If _ownerId is missing, try to assign from session players
-    if (!hero._ownerId && this.players.length > 0) {
-      this._assignOwnership();
+    if (this.gs.mode === 'combat' && this.gs.turnOrder?.length) {
+      // Combat mode: use turn order
+      const currentTurn = this.gs.turnOrder[this.gs.currentTurnIdx];
+      if (!currentTurn) return { ok: false, error: 'Нет активного хода' };
+
+      if (currentTurn.type !== 'hero') return { ok: false, error: 'Сейчас ход монстра' };
+      hero = this.findHero(action.heroId || currentTurn.entityId);
+      if (!hero) return { ok: false, error: 'Герой не найден' };
+
+      // Strict ownership check
       if (hero._ownerId && hero._ownerId !== userId) return { ok: false, error: 'Не ваш герой' };
-    }
+      if (!hero._ownerId && this.players.length > 0) {
+        this._assignOwnership();
+        if (hero._ownerId && hero._ownerId !== userId) return { ok: false, error: 'Не ваш герой' };
+      }
 
-    // 2. Активен ли юнит (его ход)?
-    if (hero.id !== currentTurn.entityId) return { ok: false, error: 'Сейчас не ход этого героя' };
+      // Active turn check
+      if (hero.id !== currentTurn.entityId) return { ok: false, error: 'Сейчас не ход этого героя' };
+    } else {
+      // Explore mode: use activeHeroIdx or find by userId
+      hero = this.findHero(action.heroId);
+      if (!hero) {
+        // Find hero owned by this user
+        hero = this.gs.heroes.find(h => h._ownerId === userId || h.userId === userId);
+      }
+      if (!hero) return { ok: false, error: 'Герой не найден' };
+
+      // Ownership check
+      if (hero._ownerId && hero._ownerId !== userId) return { ok: false, error: 'Не ваш герой' };
+
+      // Set heroId on action for downstream processing
+      action.heroId = hero.id;
+    }
 
     // 3. Жив ли юнит?
     if (hero.dead || hero.hp <= 0) return { ok: false, error: 'Герой мёртв' };
@@ -155,8 +173,8 @@ class GameEngine {
   }
 
   validateMove(hero, action) {
-    // Ход уже использован?
-    if (this.gs.moveUsed) return { ok: false, error: 'Перемещение уже использовано' };
+    // Ход уже использован? Check hero-level first, then global
+    if (hero.moveUsed || this.gs.moveUsed) return { ok: false, error: 'Перемещение уже использовано' };
 
     // Путы (rooted) блокируют движение
     if (hasStatus(hero, 'rooted')) return { ok: false, error: 'Путы — невозможно двигаться' };
@@ -327,14 +345,24 @@ class GameEngine {
 
     // Calculate path for animation
     const path = this.findPath(hero.row, hero.col, action.targetRow, action.targetCol, hero.id);
+    const stepsTaken = path.length > 0 ? path.length - 1 : 1;
 
     // Move hero
     hero.row = action.targetRow;
     hero.col = action.targetCol;
-    this.gs.moveUsed = true;
+
+    // Deduct steps
+    hero.stepsRemaining = Math.max(0, (hero.stepsRemaining || 0) - stepsTaken);
+    if (hero.stepsRemaining <= 0) {
+      hero.moveUsed = true;
+      this.gs.moveUsed = true;
+    }
 
     // Log
     this.addLog(`${hero.name} перемещается`, 'log-action');
+
+    // Update fog of war around new position
+    this._updateFogForHero(hero);
 
     // Check for traps, encounters, etc. (simplified)
     const events = [];
@@ -350,11 +378,14 @@ class GameEngine {
     return {
       type: 'move',
       heroId: hero.id,
+      heroName: hero.name,
       fromRow, fromCol,
       toRow: hero.row,
       toCol: hero.col,
+      to: { x: hero.col, y: hero.row },
       path,
       events,
+      stepsRemaining: hero.stepsRemaining,
     };
   }
 
@@ -745,6 +776,31 @@ class GameEngine {
   // ============================================================
 
   executeEndTurn() {
+    // Explore mode: advance hero index, reset turn state
+    if (this.gs.mode === 'explore' || !this.gs.turnOrder?.length) {
+      const currentHero = this.gs.heroes[this.gs.activeHeroIdx || 0];
+      if (currentHero) {
+        currentHero.moveUsed = false;
+        currentHero.actionUsed = false;
+        currentHero.bonusActionUsed = false;
+        currentHero.stepsRemaining = currentHero.moveRange || BASE_MOVE_RANGE;
+      }
+      this.gs.activeHeroIdx = ((this.gs.activeHeroIdx || 0) + 1) % this.gs.heroes.length;
+      this.gs.round = (this.gs.round || 0) + 1;
+      this.gs.moveUsed = false;
+      this.gs.actionUsed = false;
+      this.gs.bonusActionUsed = false;
+
+      // Reset next hero
+      const nextHero = this.gs.heroes[this.gs.activeHeroIdx];
+      if (nextHero) {
+        nextHero.stepsRemaining = nextHero.moveRange || BASE_MOVE_RANGE;
+      }
+
+      return { type: 'end-turn', round: this.gs.round, mode: 'explore' };
+    }
+
+    // Combat mode
     // Process zone effects
     this.processZoneEffects();
 
@@ -1658,6 +1714,29 @@ class GameEngine {
   // LOGGING
   // ============================================================
 
+  _updateFogForHero(hero) {
+    if (!this.gs.fog || !hero) return;
+    const vision = hero.vision || 4;
+    const ROWS = this.gs.map.length;
+    const COLS = this.gs.map[0]?.length || 0;
+
+    // First, set previously visible cells to explored (for all heroes' combined vision)
+    // Then reveal around current hero
+    for (let r = hero.row - vision; r <= hero.row + vision; r++) {
+      for (let c = hero.col - vision; c <= hero.col + vision; c++) {
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+        const dist = Math.abs(r - hero.row) + Math.abs(c - hero.col);
+        if (dist <= vision) {
+          this.gs.fog[r][c] = 2; // FOG_VISIBLE
+          // Discover monsters
+          this.gs.monsters.forEach(m => {
+            if (m.row === r && m.col === c && m.alive) m.discovered = true;
+          });
+        }
+      }
+    }
+  }
+
   addLog(message, type = 'log-action') {
     this.actionLog.push({ message, type, timestamp: Date.now() });
   }
@@ -1666,6 +1745,619 @@ class GameEngine {
     const log = [...this.actionLog];
     this.actionLog = [];
     return log;
+  }
+}
+
+// ============================================================
+// CELL TYPE CONSTANTS (matching design repo app.js)
+// ============================================================
+const CELL_TYPES = { FLOOR: 0, WALL: 1, HERO: 2, MONSTER: 3, CHEST: 4, TRAP: 5, RUNE: 6 };
+// 7 = talkable monster, 8 = stash guard, 9 = boss, 11 = hidden chest, 12 = friendly NPC
+
+const TERRAIN_WATER = 2;
+const FOG_UNKNOWN = 0;
+
+const RUNE_TYPES = {
+  flame:  { id: 'flame',  name: 'Руна Пламени',  label: '🔥' },
+  ice:    { id: 'ice',    name: 'Руна Льда',      label: '❄️' },
+  storm:  { id: 'storm',  name: 'Руна Шторма',    label: '⚡' },
+  wisdom: { id: 'wisdom', name: 'Руна Мудрости',  label: '📖' },
+};
+const RUNE_TYPE_KEYS = Object.keys(RUNE_TYPES);
+
+const TRAP_TYPES = {
+  snare: { id: 'snare', name: 'Капкан',  label: '🪤', dmg: 8,  status: 'snare', statusDuration: 1 },
+  rift:  { id: 'rift',  name: 'Разлом',  label: '🕳️', dmg: 15, status: 'stun',  statusDuration: 1 },
+  swamp: { id: 'swamp', name: 'Трясина', label: '🌿', dmg: 4,  status: 'swamp', statusDuration: 2, dot: 3 },
+};
+const TRAP_TYPE_KEYS = Object.keys(TRAP_TYPES);
+
+const CLASS_BASE_STATS = {
+  warrior: { label: 'W', color: '#d4a030', moveRange: 2, vision: 4, attack: 5, agility: 3, armor: 4, intellect: 2, wisdom: 2, charisma: 3, hp: 30, maxHp: 30, mp: 20, maxMp: 20, spells: [] },
+  mage:    { label: 'M', color: '#5a7fcc', moveRange: 2, vision: 5, attack: 3, agility: 5, armor: 1, intellect: 6, wisdom: 4, charisma: 3, hp: 20, maxHp: 20, mp: 30, maxMp: 30, spells: ['resurrection'] },
+  priest:  { label: 'P', color: '#8fbc8f', moveRange: 2, vision: 4, attack: 2, agility: 4, armor: 2, intellect: 4, wisdom: 6, charisma: 5, hp: 30, maxHp: 30, mp: 40, maxMp: 40, spells: [] },
+  bard:    { label: 'B', color: '#c77dba', moveRange: 3, vision: 4, attack: 3, agility: 4, armor: 2, intellect: 4, wisdom: 3, charisma: 6, hp: 25, maxHp: 25, mp: 30, maxMp: 30, spells: [] },
+};
+
+const RACE_PASSIVES = {
+  human: ['passive_human_1', 'passive_human_2'],
+  elf: ['passive_elf_1', 'passive_elf_2', 'passive_elf_3'],
+  dwarf: ['passive_dwarf_1', 'passive_dwarf_2', 'passive_dwarf_3'],
+};
+const CLASS_BASE_ABILITIES = {
+  warrior: ['base_warrior_1', 'base_warrior_2', 'base_warrior_3'],
+  mage: ['base_mage_1', 'base_mage_2', 'base_mage_3'],
+  priest: [],
+  bard: ['base_bard_1', 'base_bard_2', 'base_bard_3'],
+};
+
+// ============================================================
+// STATIC: Initialize game state from DB
+// ============================================================
+
+/**
+ * Build a complete game state from database models.
+ * Called by gameHandler.js when starting/joining a game.
+ * @param {Object} session - GameSession document (with players array)
+ * @returns {Object} gameState ready for GameEngine constructor
+ */
+GameEngine.initializeFromDB = async function (session) {
+  const Scenario = require('../models/Scenario');
+  const GameMap = require('../models/GameMap');
+  const Hero = require('../models/Hero');
+  const MonsterTemplate = require('../models/MonsterTemplate');
+
+  // 1. Load scenario
+  const scenario = await Scenario.findOne({ scenarioId: session.scenarioId, active: true }).lean();
+  if (!scenario) throw new Error(`Сценарий не найден: ${session.scenarioId}`);
+
+  // 2. Load map
+  const gameMap = await GameMap.findOne({ mapId: scenario.mapId, active: true }).lean();
+  if (!gameMap) throw new Error(`Карта не найдена: ${scenario.mapId}`);
+
+  if (!gameMap.mapData || !gameMap.mapData.length) {
+    throw new Error(`Карта ${scenario.mapId} не содержит данных`);
+  }
+
+  // 3. Load heroes for all session players
+  const heroIds = session.players.map(p => p.heroId).filter(Boolean);
+  const heroDocuments = heroIds.length > 0
+    ? await Hero.find({ _id: { $in: heroIds } }).lean()
+    : [];
+
+  // Build player→hero map with ownership
+  const playerHeroes = session.players.map(p => {
+    const heroDoc = heroDocuments.find(h => h._id.toString() === (p.heroId || '').toString());
+    return {
+      playerId: p.userId.toString(),
+      displayName: p.displayName,
+      hero: heroDoc || null,
+    };
+  }).filter(ph => ph.hero);
+
+  // 4. Load monster templates
+  const monsterTemplates = await MonsterTemplate.find({ active: true }).lean();
+  const findMonsterDef = (type) => monsterTemplates.find(m => m.type === type);
+
+  // 5. Parse map and build game state
+  const mapData = gameMap.mapData;
+  const roadMap = gameMap.roadMap || [];
+  const ROWS = mapData.length;
+  const COLS = mapData[0] ? mapData[0].length : 1;
+
+  const gs = {
+    initialized: true,
+    map: [],
+    fog: [],
+    terrain: [],
+    heroes: [],
+    monsters: [],
+    objects: [],
+    npcs: [],
+    mode: 'explore',
+    round: 1,
+    activeHeroIdx: 0,
+    turnOrder: [],
+    currentTurnIdx: 0,
+    combatMonsters: [],
+    combatZone: [],
+    combatHeroes: [],
+    moveUsed: false,
+    actionUsed: false,
+    bonusActionUsed: false,
+    mapWidth: COLS,
+    mapHeight: ROWS,
+    bgImage: gameMap.bgImage || '',
+    matchStats: {},
+    mission: {
+      objectivesCompleted: [],
+      tradersAlive: 0,
+      tradersTotal: 0,
+      goblinsDefeated: 0,
+      goblinsTotal: 0,
+      stashFound: false,
+      mainComplete: false,
+      bonusComplete: false,
+    },
+    currentScenario: session.scenarioId,
+  };
+
+  let monsterIdx = 0;
+
+  // ── Parse map grid ──
+  // Admin panel map format: 0=floor, 1=wall, 2=floor(alt), 3=monster, 4=chest, 5=trap, 6=rune
+  for (let r = 0; r < ROWS; r++) {
+    gs.map[r] = [];
+    gs.fog[r] = [];
+    gs.terrain[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      const t = mapData[r][c];
+      gs.fog[r][c] = FOG_UNKNOWN;
+
+      // Terrain from roadMap
+      const terrainVal = roadMap[r] && roadMap[r][c];
+      if (terrainVal === 'road' || terrainVal === 1) gs.terrain[r][c] = 'road';
+      else if (terrainVal === 'water' || terrainVal === TERRAIN_WATER) gs.terrain[r][c] = 'water';
+      else if (terrainVal === 'offroad') gs.terrain[r][c] = 'offroad';
+      else gs.terrain[r][c] = (terrainVal === 0 || terrainVal === 2) ? 'offroad' : 'offroad';
+
+      // Map cell: 1 = wall, everything else = floor
+      gs.map[r][c] = (t === 1) ? 'wall' : 'floor';
+
+      // Monster spawn from map (cell type 3)
+      if (t === 3) {
+        // Try to find a matching monster from pool
+        const pool = scenario.monsterPool || [];
+        let def = null;
+        // Check if any pool monster has this position
+        for (const poolEntry of pool) {
+          const type = typeof poolEntry === 'string' ? poolEntry : poolEntry?.type;
+          const positions = typeof poolEntry === 'object' ? poolEntry?.positions : null;
+          if (positions) {
+            const posMatch = positions.find(p => (p.y === r && p.x === c) || (p.row === r && p.col === c));
+            if (posMatch) {
+              def = findMonsterDef(type);
+              break;
+            }
+          }
+        }
+        if (!def) {
+          // Fallback: use first available monster type
+          const firstType = pool[0]?.type || pool[0] || 'goblin-warrior';
+          def = findMonsterDef(firstType) || findMonsterDef('goblin-warrior');
+        }
+        if (def) {
+          gs.monsters.push(_spawnMonster(def, monsterIdx, r, c, scenario.monsterOverrides));
+          monsterIdx++;
+        }
+      }
+
+      // Chest (cell type 4)
+      if (t === 4) {
+        gs.objects.push({ type: 'chest', label: '♦', row: r, col: c, opened: false, discovered: true, id: `obj-chest-${r}-${c}` });
+      }
+
+      // Trap (cell type 5)
+      if (t === 5) {
+        const tt = TRAP_TYPES[TRAP_TYPE_KEYS[Math.floor(Math.random() * TRAP_TYPE_KEYS.length)]];
+        gs.objects.push({ type: 'trap', trapType: tt.id, label: tt.label, name: tt.name, row: r, col: c, hidden: true, discovered: false, triggered: false, id: `obj-trap-${r}-${c}` });
+      }
+
+      // Rune (cell type 6)
+      if (t === 6) {
+        const rt = RUNE_TYPES[RUNE_TYPE_KEYS[Math.floor(Math.random() * RUNE_TYPE_KEYS.length)]];
+        gs.objects.push({ type: 'rune', runeType: rt.id, label: rt.label, name: rt.name, row: r, col: c, activated: false, hidden: true, discovered: false, id: `obj-rune-${r}-${c}` });
+      }
+    }
+  }
+
+  // ── Spawn monsters from scenario monsterPool with explicit positions ──
+  if (scenario.monsterPool) {
+    for (const poolEntry of scenario.monsterPool) {
+      const type = typeof poolEntry === 'string' ? poolEntry : poolEntry?.type;
+      const positions = typeof poolEntry === 'object' ? poolEntry?.positions : null;
+      if (!type) continue;
+      const def = findMonsterDef(type);
+      if (!def) continue;
+
+      if (positions && positions.length > 0) {
+        for (const pos of positions) {
+          const row = pos.y ?? pos.row ?? 0;
+          const col = pos.x ?? pos.col ?? 0;
+          // Don't duplicate if already spawned from map cell type 3
+          const alreadySpawned = gs.monsters.some(m => m.row === row && m.col === col);
+          if (!alreadySpawned) {
+            gs.monsters.push(_spawnMonster(def, monsterIdx, row, col, scenario.monsterOverrides));
+            monsterIdx++;
+          }
+        }
+      }
+    }
+  }
+
+  // ── Spawn friendly NPCs from scenario (deduplicate with traders) ──
+  const spawnedNpcKeys = new Set();
+  if (scenario.friendlyNpcs && scenario.friendlyNpcs.length > 0) {
+    scenario.friendlyNpcs.forEach((npcDef, idx) => {
+      const row = npcDef.y ?? npcDef.row ?? 0;
+      const col = npcDef.x ?? npcDef.col ?? 0;
+      const key = `${row},${col}`;
+      if (spawnedNpcKeys.has(key)) return; // skip duplicates
+      spawnedNpcKeys.add(key);
+      const npc = {
+        id: `npc-${idx}`,
+        type: npcDef.type || 'npc',
+        name: npcDef.name || 'NPC',
+        label: npcDef.label || '🧝',
+        row, col,
+        hp: npcDef.hp || 50,
+        maxHp: npcDef.hp || 50,
+        armor: 0, attack: 0, agility: 3,
+        moveRange: 0, vision: 6, attackRange: 0,
+        canTalk: true,
+        friendly: true,
+        alive: true,
+        aggro: false,
+        discovered: false,
+        dialogState: 'greeting',
+        statusEffects: [],
+      };
+      gs.monsters.push(npc);
+    });
+  }
+
+  // ── Spawn traders from scenario (deduplicate with friendlyNpcs) ──
+  let traderCount = 0;
+  if (scenario.traders && scenario.traders.length > 0) {
+    scenario.traders.forEach((trader, idx) => {
+      const row = trader.y ?? trader.row ?? 0;
+      const col = trader.x ?? trader.col ?? 0;
+      const key = `${row},${col}`;
+      if (spawnedNpcKeys.has(key)) return; // already spawned as friendlyNpc
+      spawnedNpcKeys.add(key);
+      traderCount++;
+      const traderMon = {
+        id: `trader-${idx}`,
+        type: 'trader',
+        name: trader.name || 'Торговец',
+        label: trader.label || '🧝',
+        row, col,
+        hp: trader.hp || 10, maxHp: trader.hp || 10,
+        armor: 0, attack: 0, agility: 2,
+        moveRange: 0, vision: 3, attackRange: 0,
+        canTalk: true,
+        friendly: true,
+        isTrader: true,
+        alive: true,
+        aggro: false,
+        discovered: false,
+        dialogState: 'greeting',
+        statusEffects: [],
+      };
+      gs.monsters.push(traderMon);
+    });
+    gs.mission.tradersTotal = traderCount;
+    gs.mission.tradersAlive = traderCount;
+  }
+
+  // ── Spawn objects from scenario zones ──
+  const zones = scenario.zones || {};
+
+  // Chests from zones
+  if (zones.chests && zones.chests.length > 0) {
+    zones.chests.forEach((ch, idx) => {
+      const row = ch.y ?? ch.row ?? 0;
+      const col = ch.x ?? ch.col ?? 0;
+      if (!gs.objects.some(o => o.row === row && o.col === col)) {
+        gs.objects.push({ type: 'chest', label: '♦', row, col, opened: false, discovered: true, id: `obj-zchest-${idx}` });
+      }
+    });
+  }
+
+  // Traps from zones
+  if (zones.traps && zones.traps.length > 0) {
+    zones.traps.forEach((tr, idx) => {
+      const row = tr.y ?? tr.row ?? 0;
+      const col = tr.x ?? tr.col ?? 0;
+      if (!gs.objects.some(o => o.row === row && o.col === col)) {
+        const tt = TRAP_TYPES[TRAP_TYPE_KEYS[idx % TRAP_TYPE_KEYS.length]];
+        gs.objects.push({ type: 'trap', trapType: tt.id, label: tt.label, name: tt.name, row, col, hidden: true, discovered: false, triggered: false, id: `obj-ztrap-${idx}` });
+      }
+    });
+  }
+
+  // Runes from zones
+  if (zones.runes && zones.runes.length > 0) {
+    zones.runes.forEach((ru, idx) => {
+      const row = ru.y ?? ru.row ?? 0;
+      const col = ru.x ?? ru.col ?? 0;
+      if (!gs.objects.some(o => o.row === row && o.col === col)) {
+        const rt = RUNE_TYPES[RUNE_TYPE_KEYS[idx % RUNE_TYPE_KEYS.length]];
+        gs.objects.push({ type: 'rune', runeType: rt.id, label: rt.label, name: rt.name, row, col, activated: false, hidden: true, discovered: false, id: `obj-zrune-${idx}` });
+      }
+    });
+  }
+
+  // Quest NPCs from zones
+  if (zones.questNpcs && zones.questNpcs.length > 0) {
+    zones.questNpcs.forEach((qn, idx) => {
+      const row = qn.y ?? qn.row ?? 0;
+      const col = qn.x ?? qn.col ?? 0;
+      const key = `${row},${col}`;
+      if (!spawnedNpcKeys.has(key)) {
+        spawnedNpcKeys.add(key);
+        gs.monsters.push({
+          id: `quest-npc-${idx}`,
+          type: 'quest-npc',
+          name: qn.name || 'NPC',
+          label: qn.label || '❗',
+          row, col,
+          hp: qn.hp || 30, maxHp: qn.hp || 30,
+          armor: 0, attack: 0, agility: 2,
+          moveRange: 0, vision: 4, attackRange: 0,
+          canTalk: true,
+          friendly: true,
+          isQuestNpc: true,
+          alive: true,
+          aggro: false,
+          discovered: false,
+          dialogState: 'greeting',
+          statusEffects: [],
+        });
+      }
+    });
+  }
+
+  // ── Spawn heroes at startZone positions or fallback ──
+  const startZone = zones.startZone || [];
+  for (let i = 0; i < playerHeroes.length; i++) {
+    const ph = playerHeroes[i];
+    let pos;
+    if (startZone[i]) {
+      pos = { row: startZone[i].y ?? startZone[i].row ?? 0, col: startZone[i].x ?? startZone[i].col ?? 0 };
+    } else {
+      // Fallback: find free floor cells
+      const fallbacks = _findHeroStartPositions(gs, ROWS, COLS, playerHeroes.length - i);
+      pos = fallbacks[0] || { row: 0, col: 0 };
+    }
+    const hero = _buildHero(ph.hero, ph.playerId, pos.row, pos.col);
+    gs.heroes.push(hero);
+  }
+
+  // Count goblins for mission tracking
+  gs.mission.goblinsTotal = gs.monsters.filter(m =>
+    ['goblin', 'goblin-scout', 'goblin-warrior', 'goblin-archer', 'goblin-chief'].includes(m.type)
+  ).length;
+
+  // Spawn bonus content (additional chests, runes, traps on free cells)
+  _spawnBonusContent(gs, ROWS, COLS);
+
+  // Compute initial fog of war (reveal around heroes)
+  _computeInitialFog(gs, ROWS, COLS);
+
+  // Set first hero's turn state
+  if (gs.heroes.length > 0) {
+    const firstHero = gs.heroes[0];
+    firstHero.stepsRemaining = firstHero.moveRange || BASE_MOVE_RANGE;
+  }
+
+  return gs;
+};
+
+// ── Helper: build hero object from DB document ──
+function _buildHero(heroDoc, ownerId, row, col) {
+  const base = CLASS_BASE_STATS[heroDoc.cls] || CLASS_BASE_STATS.warrior;
+  const hero = {
+    id: heroDoc._id.toString(),
+    _serverId: heroDoc._id.toString(),
+    _ownerId: ownerId,
+    userId: ownerId,
+    name: heroDoc.name,
+    cls: heroDoc.cls,
+    race: heroDoc.race || 'human',
+    gender: heroDoc.gender || 'male',
+    label: base.label,
+    color: base.color,
+    moveRange: heroDoc.moveRange ?? base.moveRange,
+    vision: heroDoc.vision ?? base.vision,
+    attack: heroDoc.attack ?? base.attack,
+    agility: heroDoc.agility ?? base.agility,
+    armor: heroDoc.armor ?? base.armor,
+    hp: heroDoc.maxHp ?? base.maxHp,
+    maxHp: heroDoc.maxHp ?? base.maxHp,
+    mp: heroDoc.maxMp ?? base.maxMp,
+    maxMp: heroDoc.maxMp ?? base.maxMp,
+    intellect: heroDoc.intellect ?? base.intellect,
+    wisdom: heroDoc.wisdom ?? base.wisdom,
+    charisma: heroDoc.charisma ?? base.charisma,
+    level: heroDoc.level || 1,
+    xp: heroDoc.xp || 0,
+    gold: heroDoc.gold || 0,
+    silver: heroDoc.silver || 0,
+    spells: heroDoc.spells?.length > 0 ? [...heroDoc.spells] : [...(base.spells || [])],
+    row, col,
+    alive: true,
+    dead: false,
+    stealth: 0,
+    surpriseAttack: false,
+    stepsRemaining: heroDoc.moveRange ?? base.moveRange,
+    moveUsed: false,
+    actionUsed: false,
+    bonusActionUsed: false,
+    statusEffects: [],
+    runeBuffs: [],
+    missionCompletions: heroDoc.missionCompletions || 0,
+    tradePoints: heroDoc.tradePoints || 0,
+    skillPoints: heroDoc.skillPoints || 0,
+    unlockedAbilities: heroDoc.unlockedAbilities || [],
+    abilities: heroDoc.abilities || [],
+    learnedAbilities: heroDoc.learnedAbilities || [],
+    baseAbilities: heroDoc.baseAbilities || [],
+    equipment: heroDoc.equipment && Object.keys(heroDoc.equipment).some(k => heroDoc.equipment[k])
+      ? JSON.parse(JSON.stringify(heroDoc.equipment))
+      : {},
+    inventory: heroDoc.inventory ? JSON.parse(JSON.stringify(heroDoc.inventory)) : [],
+  };
+
+  // Ensure baseAbilities are populated
+  if (!hero.baseAbilities || hero.baseAbilities.length === 0) {
+    hero.baseAbilities = [
+      ...(RACE_PASSIVES[hero.race] || []),
+      ...(CLASS_BASE_ABILITIES[hero.cls] || []),
+    ];
+  }
+
+  // Apply racial passive bonuses
+  if (hero.baseAbilities.includes('passive_dwarf_2')) {
+    hero.maxHp += 5;
+    hero.hp = Math.min(hero.hp + 5, hero.maxHp);
+  }
+  if (hero.baseAbilities.includes('passive_elf_1')) {
+    hero.vision = (hero.vision || 4) + 1;
+  }
+
+  return hero;
+}
+
+// ── Helper: spawn monster from MonsterTemplate ──
+function _spawnMonster(def, idx, row, col, overrides) {
+  const mon = {
+    id: `monster-${idx}`,
+    type: def.type,
+    name: def.name || def.type,
+    label: def.label || '👹',
+    row, col,
+    hp: def.hp,
+    maxHp: def.hp,
+    armor: def.armor || 0,
+    attack: def.attack || 1,
+    agility: def.agility || 0,
+    moveRange: def.moveRange || 2,
+    vision: def.vision || 4,
+    attackRange: def.attackRange || 1,
+    damageDie: def.damageDie || 'd6',
+    xpReward: def.xpReward || 10,
+    goldMin: def.goldMin || 0,
+    goldMax: def.goldMax || 5,
+    aiType: def.aiType || 'aggressive',
+    abilities: def.abilities || [],
+    canTalk: def.canTalk || false,
+    tokenImg: def.tokenImg || '',
+    img: def.img || '',
+    alive: true,
+    aggro: false,
+    discovered: false,
+    fled: false,
+    statusEffects: [],
+    runeBuffs: [],
+    shieldBlockActive: false,
+    shieldBlockCooldown: 0,
+  };
+
+  // Apply scenario overrides
+  if (overrides && overrides[def.type]) {
+    const ov = overrides[def.type];
+    if (ov.hp != null) { mon.hp = ov.hp; mon.maxHp = ov.hp; }
+    if (ov.armor != null) mon.armor = ov.armor;
+    if (ov.attack != null) mon.attack = ov.attack;
+    if (ov.agility != null) mon.agility = ov.agility;
+    if (ov.damageDie) mon.damageDie = ov.damageDie;
+    if (ov.xpReward) mon.xpReward = ov.xpReward;
+  }
+
+  return mon;
+}
+
+// ── Helper: find starting positions for heroes ──
+function _findHeroStartPositions(gs, ROWS, COLS, count) {
+  const positions = [];
+  const occupied = new Set();
+
+  // Mark occupied cells
+  gs.monsters.forEach(m => occupied.add(`${m.row},${m.col}`));
+  gs.objects.forEach(o => occupied.add(`${o.row},${o.col}`));
+
+  // Scan from bottom-left for walkable floor cells (heroes typically start at edges)
+  for (let r = ROWS - 1; r >= 0 && positions.length < count; r--) {
+    for (let c = 0; c < COLS && positions.length < count; c++) {
+      if (gs.map[r][c] === 'floor' && !occupied.has(`${r},${c}`)) {
+        positions.push({ row: r, col: c });
+        occupied.add(`${r},${c}`);
+      }
+    }
+  }
+
+  // Fallback if not enough positions found
+  while (positions.length < count) {
+    positions.push({ row: 0, col: positions.length });
+  }
+
+  return positions;
+}
+
+// ── Helper: spawn bonus content on free cells ──
+function _spawnBonusContent(gs, ROWS, COLS) {
+  const freeCells = [];
+  for (let r = 1; r < ROWS - 1; r++) {
+    for (let c = 1; c < COLS - 1; c++) {
+      if (gs.map[r][c] !== 'floor') continue;
+      if (gs.objects.some(o => o.row === r && o.col === c)) continue;
+      if (gs.monsters.some(m => m.row === r && m.col === c)) continue;
+      if (gs.heroes.some(h => h.row === r && h.col === c)) continue;
+      freeCells.push({ r, c });
+    }
+  }
+
+  function pickCell() {
+    if (freeCells.length === 0) return null;
+    const idx = Math.floor(Math.random() * freeCells.length);
+    return freeCells.splice(idx, 1)[0];
+  }
+
+  // Additional runes (2-3)
+  const numRunes = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < numRunes && freeCells.length > 2; i++) {
+    const cell = pickCell();
+    if (!cell) break;
+    const rt = RUNE_TYPES[RUNE_TYPE_KEYS[i % RUNE_TYPE_KEYS.length]];
+    gs.objects.push({
+      type: 'rune', runeType: rt.id, label: rt.label, name: rt.name,
+      row: cell.r, col: cell.c, activated: false, hidden: true, discovered: false,
+      id: `obj-brune-${cell.r}-${cell.c}`,
+    });
+  }
+
+  // Additional chests (2-3)
+  const numChests = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < numChests && freeCells.length > 0; i++) {
+    const cell = pickCell();
+    if (!cell) break;
+    gs.objects.push({
+      type: 'chest', label: '♦', row: cell.r, col: cell.c,
+      opened: false, chestType: 'normal', discovered: true,
+      id: `obj-bchest-${cell.r}-${cell.c}`,
+    });
+  }
+}
+
+// ── Helper: compute initial fog of war ──
+function _computeInitialFog(gs, ROWS, COLS) {
+  for (const hero of gs.heroes) {
+    const vision = hero.vision || 4;
+    for (let r = hero.row - vision; r <= hero.row + vision; r++) {
+      for (let c = hero.col - vision; c <= hero.col + vision; c++) {
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+        const dist = Math.abs(r - hero.row) + Math.abs(c - hero.col);
+        if (dist <= vision) {
+          gs.fog[r][c] = 2; // FOG_VISIBLE
+
+          // Discover monsters in visibility range
+          gs.monsters.forEach(m => {
+            if (m.row === r && m.col === c) m.discovered = true;
+          });
+        }
+      }
+    }
   }
 }
 

@@ -4,6 +4,9 @@ import { navigateTo } from '../../core/router';
 import { clearElement } from '../../utils/safeRender';
 import { getGameSocket } from '../../core/socket';
 
+const DIFF_LABELS: Record<string, string> = { easy: 'ЛЁГКИЙ', medium: 'СРЕДНИЙ', hard: 'СЛОЖНЫЙ', nightmare: 'ЛЕГЕНДАРНЫЙ' };
+const DIFF_COLORS: Record<string, string> = { easy: '#3acc60', medium: '#ff8c42', hard: '#ff4d4d', nightmare: '#a855f7' };
+
 export async function renderLobby(container: HTMLElement): Promise<void> {
   clearElement(container);
 
@@ -13,6 +16,25 @@ export async function renderLobby(container: HTMLElement): Promise<void> {
   const user = getCurrentUser();
   const isHost = session.hostUserId === user?._id;
   const maxPlayers = session.maxPlayers || 4;
+
+  // Load scenario details from config
+  let scenarioName = session.scenarioId || 'Сценарий';
+  let scenarioDesc = '';
+  let scenarioDiff = 'easy';
+  let scenarioObjectives: any = {};
+  let mapBgImage = '';
+  try {
+    const config = await api.get('/api/game/config');
+    const scenario = (config.scenarios || []).find((s: any) => s.scenarioId === session.scenarioId);
+    if (scenario) {
+      scenarioName = scenario.name;
+      scenarioDesc = scenario.description || '';
+      scenarioDiff = scenario.difficulty || 'easy';
+      scenarioObjectives = scenario.objectives || {};
+    }
+    const gameMap = (config.maps || []).find((m: any) => m.mapId === scenario?.mapId);
+    if (gameMap) mapBgImage = gameMap.bgImage || '';
+  } catch {}
 
   container.innerHTML = `
     <div class="lby">
@@ -31,17 +53,18 @@ export async function renderLobby(container: HTMLElement): Promise<void> {
 
       <!-- Scenario Info Banner -->
       <div class="lby-banner">
-        <div class="lby-banner-img" style="background-image: url('/uploads/maps/${session.mapId || 'forest-road'}.jpg')"></div>
+        <div class="lby-banner-img" style="background-image: url('${mapBgImage || `/uploads/maps/${session.mapId || 'forest-road'}.jpg`}')"></div>
         <div class="lby-banner-info">
-          <h2 class="lby-scenario-name">${session.scenarioId || 'Сценарий'}</h2>
-          <p class="lby-scenario-desc">Описание сценария</p>
+          <h2 class="lby-scenario-name">${scenarioName}</h2>
+          <p class="lby-scenario-desc">${scenarioDesc}</p>
           <div class="lby-scenario-meta">
-            <span class="lby-diff-badge">ЛЁГКИЙ</span>
+            <span class="lby-diff-badge" style="border-color:${DIFF_COLORS[scenarioDiff]};color:${DIFF_COLORS[scenarioDiff]}">${DIFF_LABELS[scenarioDiff]}</span>
             <span class="lby-meta-text">до ${maxPlayers} игроков</span>
           </div>
           <div class="lby-objectives">
             <p class="lby-obj-title">Цели:</p>
-            <p class="lby-obj">⚔ Победить всех врагов</p>
+            ${scenarioObjectives.primary ? `<p class="lby-obj">⚔ ${scenarioObjectives.primary}</p>` : '<p class="lby-obj">⚔ Победить всех врагов</p>'}
+            ${scenarioObjectives.secondary ? `<p class="lby-obj" style="color:var(--gold)">★ ${scenarioObjectives.secondary}</p>` : ''}
           </div>
         </div>
       </div>
@@ -95,10 +118,49 @@ export async function renderLobby(container: HTMLElement): Promise<void> {
     navigateTo('/dashboard');
   });
 
-  // Start
+  // Socket listeners for multiplayer events
+  const socket = getGameSocket();
+
+  // Listen for game-started (for non-host players)
+  socket.off('game-started');
+  socket.on('game-started', () => {
+    sessionStorage.setItem('current_session', JSON.stringify({ ...session, status: 'playing' }));
+    navigateTo('/game');
+  });
+
+  // Listen for player updates
+  socket.off('player-joined');
+  socket.on('player-joined', (data: any) => {
+    if (!session.players.some((p: any) => p.userId === data.userId)) {
+      session.players.push(data);
+      sessionStorage.setItem('current_session', JSON.stringify(session));
+      const grid = document.getElementById('lby-team-grid');
+      if (grid) grid.innerHTML = renderPlayerSlots(session.players, maxPlayers, isHost);
+      // Re-bind invite buttons
+      document.querySelectorAll('.lby-invite-btn').forEach(btn => {
+        btn.addEventListener('click', () => document.getElementById('invite-overlay')?.classList.remove('hidden'));
+      });
+    }
+  });
+
+  socket.off('player-left');
+  socket.on('player-left', (data: any) => {
+    session.players = session.players.filter((p: any) => p.userId !== data.userId);
+    sessionStorage.setItem('current_session', JSON.stringify(session));
+    const grid = document.getElementById('lby-team-grid');
+    if (grid) grid.innerHTML = renderPlayerSlots(session.players, maxPlayers, isHost);
+    document.querySelectorAll('.lby-invite-btn').forEach(btn => {
+      btn.addEventListener('click', () => document.getElementById('invite-overlay')?.classList.remove('hidden'));
+    });
+  });
+
+  // Join the session socket room so we receive events
+  socket.emit('join-session', { sessionId: session._id });
+
+  // Start (host only)
   document.getElementById('btn-lby-start')?.addEventListener('click', () => {
-    const socket = getGameSocket();
     socket.emit('start-game', { sessionId: session._id });
+    sessionStorage.setItem('current_session', JSON.stringify({ ...session, status: 'playing' }));
     navigateTo('/game');
   });
 
