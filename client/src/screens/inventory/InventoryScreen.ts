@@ -397,10 +397,14 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
 
       <!-- Stash -->
       <div class="inv-stash-section">
-        <h4 class="inv-section-title">СУНДУК</h4>
+        <h4 class="inv-section-title">СУНДУК <span class="inv-stash-slots">${(hero.stashRows || 2) * 9} слотов</span></h4>
         <p class="inv-stash-hint">В сундук вы можете положить предметы, которые могут понадобиться вам позже</p>
         <div class="inv-grid inv-stash-grid">
           ${renderInventoryGrid(stash, (hero.stashRows || 2) * 9, 'stash')}
+        </div>
+        <div class="inv-stash-buy">
+          <button class="inv-stash-buy-btn" id="btn-buy-stash-5">📦 +5 слотов <span class="inv-stash-price">99 ₽</span></button>
+          <button class="inv-stash-buy-btn inv-stash-buy-btn--premium" id="btn-buy-stash-10">📦 +10 слотов <span class="inv-stash-price">149 ₽</span><span class="inv-stash-badge">ВЫГОДНО</span></button>
         </div>
       </div>
   `;
@@ -492,6 +496,58 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
         alert('❌ ' + (data.error || 'Ошибка'));
       }
     } catch { alert('Ошибка подключения'); }
+  });
+
+  // ===== BUY STASH SLOTS =====
+  const buyStash = async (slots: number) => {
+    const token = localStorage.getItem('taloria_token');
+    // Check if item exists in catalog
+    const slug = slots === 5 ? 'stash-5' : 'stash-10';
+    try {
+      const res = await fetch('/api/store/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ catalogItemSlug: slug }),
+      });
+      const data = await res.json();
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else if (data.devMode || res.ok) {
+        // Dev mode: auto-fulfill — add stash rows directly
+        const newRows = (hero.stashRows || 2) + Math.ceil(slots / 9);
+        await fetch(`/api/heroes/${hero._id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ stashRows: newRows }),
+        });
+        hero.stashRows = newRows;
+        allHeroes[selectedHeroIdx] = hero;
+        renderWithTabs(rootContainer);
+        alert(`✅ Добавлено ${slots} слотов сундука!`);
+      } else {
+        alert(data.error || 'Ошибка покупки');
+      }
+    } catch {
+      // Fallback: direct add (dev mode)
+      const newRows = (hero.stashRows || 2) + Math.ceil(slots / 9);
+      const token2 = localStorage.getItem('taloria_token');
+      await fetch(`/api/heroes/${hero._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token2}` },
+        body: JSON.stringify({ stashRows: newRows }),
+      });
+      hero.stashRows = newRows;
+      allHeroes[selectedHeroIdx] = hero;
+      renderWithTabs(rootContainer);
+      alert(`✅ Добавлено ${slots} слотов сундука!`);
+    }
+  };
+
+  document.getElementById('btn-buy-stash-5')?.addEventListener('click', () => {
+    if (confirm('Купить +5 слотов сундука за 99 ₽?')) buyStash(5);
+  });
+  document.getElementById('btn-buy-stash-10')?.addEventListener('click', () => {
+    if (confirm('Купить +10 слотов сундука за 149 ₽? (Выгоднее!)')) buyStash(10);
   });
 
   // ===== DRAG AND DROP =====
