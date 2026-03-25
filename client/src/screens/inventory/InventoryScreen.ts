@@ -397,10 +397,10 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
 
       <!-- Stash -->
       <div class="inv-stash-section">
-        <h4 class="inv-section-title">СУНДУК <span class="inv-stash-slots">${(hero.stashRows || 2) * 9} слотов</span></h4>
+        <h4 class="inv-section-title">СУНДУК <span class="inv-stash-slots">${(hero.stashRows || 2) * 9 + (hero.stashExtraSlots || 0)} слотов</span></h4>
         <p class="inv-stash-hint">В сундук вы можете положить предметы, которые могут понадобиться вам позже</p>
         <div class="inv-grid inv-stash-grid">
-          ${renderInventoryGrid(stash, (hero.stashRows || 2) * 9, 'stash')}
+          ${renderInventoryGrid(stash, (hero.stashRows || 2) * 9 + (hero.stashExtraSlots || 0), 'stash')}
         </div>
         <div class="inv-stash-buy">
           <button class="inv-stash-buy-btn" id="btn-buy-stash-5">📦 +5 слотов <span class="inv-stash-price">99 ₽</span></button>
@@ -501,7 +501,6 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
   // ===== BUY STASH SLOTS =====
   const buyStash = async (slots: number) => {
     const token = localStorage.getItem('taloria_token');
-    // Check if item exists in catalog
     const slug = slots === 5 ? 'stash-5' : 'stash-10';
     try {
       const res = await fetch('/api/store/checkout', {
@@ -512,35 +511,31 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
       const data = await res.json();
       if (data.paymentUrl) {
         window.location.href = data.paymentUrl;
-      } else if (data.devMode || res.ok) {
-        // Dev mode: auto-fulfill — add stash rows directly
-        const newRows = (hero.stashRows || 2) + Math.ceil(slots / 9);
-        await fetch(`/api/heroes/${hero._id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ stashRows: newRows }),
-        });
-        hero.stashRows = newRows;
-        allHeroes[selectedHeroIdx] = hero;
-        renderWithTabs(rootContainer);
-        alert(`✅ Добавлено ${slots} слотов сундука!`);
-      } else {
-        alert(data.error || 'Ошибка покупки');
+        return;
       }
-    } catch {
-      // Fallback: direct add (dev mode)
-      const newRows = (hero.stashRows || 2) + Math.ceil(slots / 9);
-      const token2 = localStorage.getItem('taloria_token');
-      await fetch(`/api/heroes/${hero._id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token2}` },
-        body: JSON.stringify({ stashRows: newRows }),
-      });
-      hero.stashRows = newRows;
-      allHeroes[selectedHeroIdx] = hero;
-      renderWithTabs(rootContainer);
-      alert(`✅ Добавлено ${slots} слотов сундука!`);
+    } catch {}
+
+    // Dev mode / fallback: add slots directly
+    // +5 = half row (5 extra slots), +10 = full row (stashRows + 1)
+    const token2 = localStorage.getItem('taloria_token');
+    const patch: any = {};
+    if (slots === 5) {
+      // Add 5 extra slots (stored as stashExtraSlots)
+      patch.stashExtraSlots = (hero.stashExtraSlots || 0) + 5;
+    } else {
+      // Add full row (9 slots)
+      patch.stashRows = (hero.stashRows || 2) + 1;
     }
+    await fetch(`/api/heroes/${hero._id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token2}` },
+      body: JSON.stringify(patch),
+    });
+    if (patch.stashExtraSlots !== undefined) hero.stashExtraSlots = patch.stashExtraSlots;
+    if (patch.stashRows !== undefined) hero.stashRows = patch.stashRows;
+    allHeroes[selectedHeroIdx] = hero;
+    renderWithTabs(rootContainer);
+    alert(`✅ Добавлено ${slots} слотов сундука!`);
   };
 
   document.getElementById('btn-buy-stash-5')?.addEventListener('click', () => {

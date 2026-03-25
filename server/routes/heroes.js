@@ -148,7 +148,7 @@ router.patch('/:id', auth(), validate(updateHeroSchema), async (req, res, next) 
       'weaponChosen', 'xp', 'level', 'attack', 'agility', 'armor', 'intellect',
       'wisdom', 'charisma', 'maxHp', 'maxMp', 'hp', 'mp', 'canLevelUp',
       'tradePoints', 'missionCompletions', 'skillPoints', 'unlockedAbilities',
-      'abilities', 'learnedAbilities', 'abilityChosen', 'baseAbilities', 'stash', 'stashRows',
+      'abilities', 'learnedAbilities', 'abilityChosen', 'baseAbilities', 'stash', 'stashRows', 'stashExtraSlots',
     ];
 
     const update = {};

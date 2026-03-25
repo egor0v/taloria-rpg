@@ -43,6 +43,7 @@ const heroSchema = new mongoose.Schema(
     inventory: { type: [mongoose.Schema.Types.Mixed], default: [] },
     stash: { type: [mongoose.Schema.Types.Mixed], default: [] },
     stashRows: { type: Number, default: 2 },
+    stashExtraSlots: { type: Number, default: 0 },
 
     gold: { type: Number, default: 0 },
     silver: { type: Number, default: 10 },
