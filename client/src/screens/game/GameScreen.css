@@ -100,9 +100,10 @@
 .cell-reachable:hover { background: rgba(58,204,96,0.25) !important; }
 .cell-attackable { background: rgba(255,77,77,0.12) !important; box-shadow: inset 0 0 8px rgba(255,77,77,0.15); }
 
-/* Fog of war */
-.fog-hidden { background: rgba(0,0,0,0.95) !important; cursor: default; }
-.fog-explored { filter: brightness(0.5) saturate(0.5); }
+/* Fog of war — must cover the parent's background image */
+.fog-hidden { background: #0a0806 !important; cursor: default; pointer-events: none; }
+.fog-explored { position: relative; }
+.fog-explored::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.55); pointer-events: none; }
 
 /* ─── TOKENS ─── */
 .token { width: 32px; height: 32px; border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }

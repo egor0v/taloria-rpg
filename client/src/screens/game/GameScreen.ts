@@ -260,7 +260,15 @@ function renderMap() {
   const mapWidth = gs.mapWidth || (map[0]?.length || 1);
   const myHero = getMyHero();
 
-  let html = `<div class="tactical-grid" style="grid-template-columns:repeat(${mapWidth},var(--cell-size,40px));${bgImage ? `background-image:url(${bgImage});background-size:100% 100%;background-repeat:no-repeat;` : ''}">`;
+  // Calculate cell size to preserve image aspect ratio
+  const cellSizePx = 40;
+  let gridStyle = `grid-template-columns:repeat(${mapWidth},${cellSizePx}px);`;
+  if (bgImage) {
+    // Grid total size = mapWidth * cellSize x mapHeight * cellSize
+    // Use cover + center so image is not deformed
+    gridStyle += `background-image:url(${bgImage});background-size:cover;background-position:center;background-repeat:no-repeat;`;
+  }
+  let html = `<div class="tactical-grid" style="${gridStyle}">`;
 
   for (let y = 0; y < mapHeight; y++) {
     for (let x = 0; x < mapWidth; x++) {
