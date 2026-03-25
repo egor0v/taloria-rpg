@@ -266,10 +266,13 @@
 }
 
 .inv-slot-label {
-  font-size: 0.6rem;
+  font-size: 0.52rem;
   color: var(--text-muted);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-align: center;
+  line-height: 1.2;
+  padding: 2px;
 }
 
 /* ===== Right: Inventory Grid ===== */

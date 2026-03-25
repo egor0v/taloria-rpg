@@ -4,7 +4,7 @@ import { getSelectedHeroId, setSelectedHeroId } from '../../core/heroSelection';
 import './InventoryScreen.css';
 
 const STAT_NAMES: Record<string, string> = { attack: 'СИЛ', agility: 'ЛОВ', armor: 'ВЫН', intellect: 'ИНТ', wisdom: 'МУД', charisma: 'ХАР' };
-const SLOT_NAMES: Record<string, string> = { weapon: 'ОРУЖИЕ', shield: 'ЩИТ', helmet: 'ШЛЕМ', armor: 'БРОНЯ', boots: 'ОБУВЬ', pants: 'ШТАНЫ', ring: 'КОЛЬЦО', amulet: 'АМУЛЕТ' };
+const SLOT_NAMES: Record<string, string> = { weapon: 'ОРУЖИЕ', shield: 'ЩИТ', helmet: 'ШЛЕМ', cloak: 'ПЛАЩ', armor: 'БРОНЯ', pants: 'ШТАНЫ', boots: 'ОБУВЬ', gloves: 'ПЕРЧАТКИ / ПРЕДМЕТ', ring: 'КОЛЬЦО / БРАСЛЕТ', amulet: 'АМУЛЕТ / ОЖЕРЕЛЬЕ' };
 const CLS_NAMES: Record<string, Record<string, string>> = {
   warrior: { male: 'Воин', female: 'Воительница' }, mage: { male: 'Маг', female: 'Магесса' },
   priest: { male: 'Жрец', female: 'Жрица' }, bard: { male: 'Бард', female: 'Бардесса' },
@@ -251,12 +251,13 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
   const maxWeight = 100 + hero.attack * 10;
   const weightPercent = Math.min(100, (totalWeight / maxWeight) * 100);
 
-  // Slots layout: [weapon, shield], [helmet, -], [armor, pants], [boots, -]
+  // Slots layout: 2 columns × 5 rows = 10 slots
   const slotRows = [
     ['weapon', 'shield'],
-    ['helmet', null],
+    ['helmet', 'cloak'],
     ['armor', 'pants'],
-    ['boots', null],
+    ['boots', 'gloves'],
+    ['ring', 'amulet'],
   ];
 
   body.innerHTML = `
@@ -506,7 +507,24 @@ function setupDragDrop(body: HTMLElement, hero: any, rootContainer: HTMLElement)
       const slot = (el as HTMLElement).dataset.slot;
       if (!slot) return;
       if (dragData.zone !== 'inventory') return; // can only equip from inventory
-      if (dragData.item.slot !== slot && dragData.item.slot !== 'none') return; // item must match slot
+
+      // Check slot compatibility
+      const itemSlot = dragData.item.slot || 'none';
+      const itemType = dragData.item.type || '';
+      const SLOT_ACCEPTS: Record<string, (s: string, t: string) => boolean> = {
+        weapon: (s, t) => s === 'weapon' || t === 'weapon',
+        shield: (s, t) => s === 'shield' || t === 'shield',
+        helmet: (s, t) => s === 'helmet' || t === 'helmet',
+        armor: (s, t) => s === 'armor' || t === 'armor',
+        boots: (s, t) => s === 'boots' || t === 'boots',
+        pants: (s, t) => s === 'pants' || t === 'pants',
+        ring: (s, t) => s === 'ring' || t === 'jewelry' || t === 'ring',
+        amulet: (s, t) => s === 'amulet' || t === 'jewelry' || t === 'amulet',
+        cloak: (s, t) => s === 'cloak' || t === 'cloak',
+        gloves: (s, t) => s === 'gloves' || ['tool', 'potion', 'scroll', 'food'].includes(t),
+      };
+      const accepts = SLOT_ACCEPTS[slot];
+      if (accepts && !accepts(itemSlot, itemType)) return;
 
       // Equip: swap current equipped with dragged item
       const currentEquipped = hero.equipment[slot];

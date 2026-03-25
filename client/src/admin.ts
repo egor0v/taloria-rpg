@@ -221,7 +221,7 @@ const FIELDS_ITEM: FieldDef[] = [
   { key: 'itemId', label: 'ID предмета', type: 'text', required: true, tableCol: true },
   { key: 'name', label: 'Название', type: 'text', required: true, tableCol: true },
   { key: 'type', label: 'Тип', type: 'select', options: ['weapon', 'armor', 'helmet', 'boots', 'pants', 'shield', 'ring', 'amulet', 'potion', 'scroll', 'tool', 'food', 'junk', 'quest', 'jewelry'], required: true, tableCol: true },
-  { key: 'slot', label: 'Слот', type: 'select', options: ['none', 'weapon', 'shield', 'helmet', 'armor', 'boots', 'pants', 'ring', 'amulet'] },
+  { key: 'slot', label: 'Слот', type: 'select', options: ['none', 'weapon', 'shield', 'helmet', 'cloak', 'armor', 'pants', 'boots', 'gloves', 'ring', 'amulet'] },
   { key: 'rarity', label: 'Редкость', type: 'select', options: ['common', 'uncommon', 'rare', 'epic', 'legendary'], tableCol: true },
   { key: 'description', label: 'Описание', type: 'textarea' },
   { key: 'characteristics', label: 'Характеристики', type: 'text' },
