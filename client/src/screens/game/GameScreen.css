@@ -79,25 +79,23 @@
 
 /* ─── TACTICAL GRID ─── */
 .tactical-grid {
-  display: grid; gap: 1px;
+  display: grid; gap: 0;
   --cell-size: 40px;
-  background-size: cover; background-position: center;
 }
 .map-cell {
   width: var(--cell-size); height: var(--cell-size);
   position: relative; cursor: pointer;
   transition: background 0.15s;
   display: flex; align-items: center; justify-content: center;
-  outline: 1px solid rgba(255,255,255,0.04);
+  outline: none;
 }
-/* Cells are transparent — background image shows terrain */
+/* All cells invisible — background image is the visual map */
 .cell-floor { background: transparent; }
 .cell-obstacle { background: transparent; }
-.cell-water { background: rgba(20,60,120,0.25); }
-.cell-fire { background: rgba(200,40,0,0.3); animation: fire-glow 1.5s ease-in-out infinite alternate; }
-@keyframes fire-glow { 0% { background: rgba(200,40,0,0.2); box-shadow: inset 0 0 4px rgba(255,80,0,0.2); } 100% { background: rgba(220,60,0,0.35); box-shadow: inset 0 0 8px rgba(255,120,0,0.35); } }
-.cell-wall { background: rgba(10,8,6,0.7); cursor: default; }
-.cell-floor:hover, .cell-obstacle:hover, .cell-water:hover, .cell-fire:hover { background: rgba(246,200,109,0.15); box-shadow: inset 0 0 6px rgba(246,200,109,0.15); }
+.cell-water { background: transparent; }
+.cell-fire { background: transparent; }
+.cell-wall { background: transparent; cursor: default; pointer-events: none; }
+.cell-floor:hover, .cell-obstacle:hover, .cell-water:hover, .cell-fire:hover { background: rgba(246,200,109,0.12); box-shadow: inset 0 0 6px rgba(246,200,109,0.1); }
 .cell-reachable { background: rgba(58,204,96,0.12) !important; box-shadow: inset 0 0 8px rgba(58,204,96,0.15); border: 1px solid rgba(58,204,96,0.2); }
 .cell-reachable:hover { background: rgba(58,204,96,0.25) !important; }
 .cell-attackable { background: rgba(255,77,77,0.12) !important; box-shadow: inset 0 0 8px rgba(255,77,77,0.15); }
@@ -356,13 +354,13 @@
 .dice-popup-value { font-family: 'Cinzel', serif; font-size: 2.2rem; font-weight: 900; color: var(--gold, #c9a24e); text-shadow: 0 2px 8px rgba(0,0,0,0.6); transition: color 0.3s, transform 0.3s; }
 .dice-value-success { color: #3acc60 !important; transform: scale(1.2); }
 .dice-value-fail { color: #ff4d4d !important; transform: scale(1.2); }
-.dice-shaking { animation: diceShake 0.08s infinite alternate; }
-@keyframes diceShake {
-  0% { transform: rotate(-8deg) scale(1.05); }
-  25% { transform: rotate(6deg) scale(0.95); }
-  50% { transform: rotate(-5deg) scale(1.08); }
-  75% { transform: rotate(7deg) scale(0.97); }
-  100% { transform: rotate(-3deg) scale(1.03); }
+.dice-shaking { animation: diceFloat 0.6s ease-in-out infinite; filter: blur(1.5px); }
+@keyframes diceFloat {
+  0% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-6px) rotate(3deg); }
+  50% { transform: translateY(0) rotate(0deg); }
+  75% { transform: translateY(4px) rotate(-2deg); }
+  100% { transform: translateY(0) rotate(0deg); }
 }
 .dice-success { border-color: #3acc60 !important; color: #3acc60 !important; box-shadow: 0 0 20px rgba(58,204,96,0.4); animation: dicePulseGreen 0.5s; }
 .dice-fail { border-color: #ff4d4d !important; color: #ff4d4d !important; box-shadow: 0 0 20px rgba(255,77,77,0.4); animation: dicePulseRed 0.5s; }
