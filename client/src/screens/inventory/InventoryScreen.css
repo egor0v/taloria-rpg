@@ -61,7 +61,7 @@
 }
 
 /* ===== Left: Portrait + Stats ===== */
-.inv-left { display: flex; flex-direction: column; gap: 12px; }
+.inv-left { display: flex; flex-direction: column; gap: 12px; padding-top: 26px; /* align portrait top with equip/inv cells (below section titles) */ }
 
 .inv-portrait {
   width: 100%;
