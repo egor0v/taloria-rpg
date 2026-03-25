@@ -24,6 +24,7 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // Socket.io
@@ -64,6 +65,7 @@ app.use(cookieParser());
 
 // Static files
 app.use('/uploads', express.static(uploadsDir));
+app.use('/img', express.static(path.join(__dirname, '..', 'img')));
 
 // Serve client in production
 if (config.nodeEnv === 'production') {

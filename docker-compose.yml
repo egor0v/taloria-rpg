@@ -6,6 +6,7 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - uploads-data:/app/uploads
+      - /opt/taloria/img:/app/img:ro
     depends_on:
       - mongo
     restart: always
