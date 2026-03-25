@@ -168,6 +168,29 @@
 .action-btn--active { border-color: var(--cta); color: var(--cta); background: rgba(58,204,96,0.08); }
 .action-btn--disabled { opacity: 0.35; pointer-events: none; border-color: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.3) !important; background: transparent !important; }
 
+/* NPC hover popup */
+.npc-hover-popup { position: fixed; z-index: 10000; background: linear-gradient(145deg, #2a2520, #1a1610); border: 1px solid rgba(201,162,78,0.4); border-radius: 10px; padding: 12px 16px; min-width: 200px; max-width: 280px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); pointer-events: auto; }
+.npc-hover-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.npc-hover-icon { font-size: 1.6rem; flex-shrink: 0; }
+.npc-hover-img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+.npc-hover-name { font-family: 'Cinzel', serif; font-size: 0.95rem; font-weight: 700; }
+.npc-friendly { color: #3acc60; }
+.npc-hostile { color: #ff6b6b; }
+.npc-hover-type { font-size: 0.72rem; color: #999; }
+.npc-hover-hp { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.npc-hover-hp-label { font-size: 0.65rem; color: #999; }
+.npc-hover-hp-track { flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+.npc-hover-hp-fill { height: 100%; background: #cc3333; border-radius: 3px; }
+.npc-hover-hp-val { font-size: 0.65rem; color: #ccc; }
+.npc-hover-actions { display: flex; gap: 6px; }
+.npc-hover-btn { flex: 1; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; background: rgba(255,255,255,0.04); color: #ddd; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
+.npc-hover-btn:hover { background: rgba(255,255,255,0.1); }
+.npc-hover-talk { border-color: rgba(58,204,96,0.3); }
+.npc-hover-talk:hover { background: rgba(58,204,96,0.15); color: #3acc60; }
+.npc-hover-attack { border-color: rgba(255,77,77,0.3); }
+.npc-hover-attack:hover { background: rgba(255,77,77,0.15); color: #ff4d4d; }
+.npc-hover-dist { font-size: 0.72rem; color: #888; font-style: italic; }
+
 /* No actions left popup */
 .no-actions-popup { position: absolute; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); pointer-events: auto; }
 .no-actions-card { background: linear-gradient(145deg, #2a2520, #1a1610); border: 2px solid var(--gold, #c9a24e); border-radius: 16px; padding: 24px 36px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }

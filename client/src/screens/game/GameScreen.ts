@@ -382,12 +382,12 @@ function renderMap() {
           <span class="token-hp-bar" style="width:${Math.round(hero.hp / hero.maxHp * 100)}%"></span>
         </div>`;
       } else if (showMonster) {
-        content = `<div class="token token-monster" title="${monster.name} HP:${monster.hp}/${monster.maxHp}">
+        content = `<div class="token token-monster" data-npc-id="${monster.id}" data-npc='${JSON.stringify({id:monster.id,name:monster.name,hp:monster.hp,maxHp:monster.maxHp,type:monster.type,canTalk:monster.canTalk,friendly:false,label:monster.label||'👹',tokenImg:monster.tokenImg})}' title="${monster.name}">
           ${monster.tokenImg ? `<img src="${monster.tokenImg}" class="token-img" alt="" />` : '👹'}
           <span class="token-hp-bar token-hp-monster" style="width:${Math.round(monster.hp / monster.maxHp * 100)}%"></span>
         </div>`;
       } else if (friendlyNpc) {
-        content = `<span class="token-object token-npc" title="${friendlyNpc.name}">${friendlyNpc.label || '🧝'}</span>`;
+        content = `<span class="token-object token-npc" data-npc-id="${friendlyNpc.id}" data-npc='${JSON.stringify({id:friendlyNpc.id,name:friendlyNpc.name,hp:friendlyNpc.hp,maxHp:friendlyNpc.maxHp,type:friendlyNpc.type,canTalk:friendlyNpc.canTalk,friendly:true,label:friendlyNpc.label||'🧝',isTrader:friendlyNpc.isTrader,isQuestNpc:friendlyNpc.isQuestNpc})}' title="${friendlyNpc.name}">${friendlyNpc.label || '🧝'}</span>`;
       } else if (obj && fogV > 0) {
         const objImgs: Record<string, string> = { chest: '/img/игровые предметы/chest.png' };
         const objIcons: Record<string, string> = { chest: '📦', trap: '⚡', rune: '🔮', questNpc: '❗' };
@@ -409,6 +409,26 @@ function renderMap() {
       const cx = parseInt((cell as HTMLElement).dataset.x!);
       const cy = parseInt((cell as HTMLElement).dataset.y!);
       onCellClick(cx, cy);
+    });
+  });
+
+  // NPC hover popups
+  mapEl.querySelectorAll('[data-npc-id]').forEach(el => {
+    el.addEventListener('mouseenter', (e) => {
+      const npcData = JSON.parse((el as HTMLElement).dataset.npc || '{}');
+      const myH = getMyHero();
+      const parent = (el as HTMLElement).closest('.map-cell') as HTMLElement;
+      const npcX = parseInt(parent?.dataset.x || '0');
+      const npcY = parseInt(parent?.dataset.y || '0');
+      const dist = myH ? Math.abs(myH.col - npcX) + Math.abs(myH.row - npcY) : 99;
+      const inRange = dist <= 4;
+      showNpcHover(npcData, e as MouseEvent, inRange);
+    });
+    el.addEventListener('mouseleave', () => {
+      setTimeout(() => {
+        const popup = document.getElementById('npc-hover');
+        if (popup && !popup.matches(':hover')) popup.remove();
+      }, 200);
     });
   });
 
@@ -858,6 +878,53 @@ function applyZoom() {
 // ═══════════════════════════════════
 function getMyHero() {
   return gs?.heroes?.find((h: any) => h._ownerId === user?._id || h.userId === user?._id);
+}
+
+// ═══════════════════════════════════
+// NPC HOVER POPUP
+// ═══════════════════════════════════
+function showNpcHover(npc: any, e: MouseEvent, inRange: boolean) {
+  document.getElementById('npc-hover')?.remove();
+
+  const typeLabels: Record<string, string> = { 'goblin-scout': 'Разведчик', 'goblin-warrior': 'Воин', 'wolf': 'Зверь', 'troll': 'Тролль', 'troll-chief': 'Босс', 'cave-spider': 'Паук', trader: 'Торговец', npc: 'NPC', 'quest-npc': 'Квестовый NPC' };
+  const typeLabel = typeLabels[npc.type] || npc.type || 'NPC';
+  const isFriendly = npc.friendly;
+
+  const popup = document.createElement('div');
+  popup.id = 'npc-hover';
+  popup.className = 'npc-hover-popup';
+  popup.innerHTML = `
+    <div class="npc-hover-header">
+      <span class="npc-hover-icon">${npc.tokenImg ? `<img src="${npc.tokenImg}" class="npc-hover-img" />` : (npc.label || '👹')}</span>
+      <div>
+        <div class="npc-hover-name ${isFriendly ? 'npc-friendly' : 'npc-hostile'}">${npc.name}</div>
+        <div class="npc-hover-type">${typeLabel}</div>
+      </div>
+    </div>
+    ${!isFriendly ? `<div class="npc-hover-hp"><span class="npc-hover-hp-label">HP</span><div class="npc-hover-hp-track"><div class="npc-hover-hp-fill" style="width:${Math.round((npc.hp/npc.maxHp)*100)}%"></div></div><span class="npc-hover-hp-val">${npc.hp}/${npc.maxHp}</span></div>` : ''}
+    ${inRange ? `<div class="npc-hover-actions">
+      ${npc.canTalk || isFriendly ? `<button class="npc-hover-btn npc-hover-talk" data-npc-id="${npc.id}">💬 Поговорить</button>` : ''}
+      <button class="npc-hover-btn npc-hover-attack" data-npc-id="${npc.id}">⚔ Атаковать</button>
+    </div>` : `<div class="npc-hover-dist">Слишком далеко (нужно ≤ 4 клетки)</div>`}
+  `;
+
+  // Position near mouse
+  popup.style.left = (e.clientX + 12) + 'px';
+  popup.style.top = (e.clientY - 20) + 'px';
+  document.body.appendChild(popup);
+
+  // Keep popup alive on hover
+  popup.addEventListener('mouseleave', () => popup.remove());
+
+  // Button handlers
+  popup.querySelector('.npc-hover-talk')?.addEventListener('click', () => {
+    popup.remove();
+    sock?.emit('action-request', { type: 'interact', targetId: npc.id });
+  });
+  popup.querySelector('.npc-hover-attack')?.addEventListener('click', () => {
+    popup.remove();
+    sock?.emit('action-request', { type: 'attack', targetId: npc.id });
+  });
 }
 
 // ═══════════════════════════════════
