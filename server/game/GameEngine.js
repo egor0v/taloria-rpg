@@ -165,6 +165,8 @@ class GameEngine {
         return this.validateAttack(hero, action);
       case 'ability':
         return this.validateAbility(hero, action);
+      case 'interact':
+        return this.validateInteract(hero, action);
       case 'end-turn':
         return { ok: true };
       default:
@@ -324,6 +326,9 @@ class GameEngine {
       case 'ability':
         result = this.executeAbility(action);
         break;
+      case 'interact':
+        result = this.executeInteract(action);
+        break;
       case 'end-turn':
         result = this.executeEndTurn();
         break;
@@ -477,7 +482,9 @@ class GameEngine {
     const vulnBonus = getVulnerability(target);
     attackBonus += vulnBonus;
 
-    const baseDmg = dmgRoll + attackBonus;
+    // Damage = weaponRoll + attackBonus - targetArmor (min 1)
+    const targetArmor = this.getEntityArmor(target);
+    const baseDmg = Math.max(1, dmgRoll + attackBonus - targetArmor);
     const finalDmg = isCrit ? baseDmg * 2 : baseDmg;
 
     // Apply damage with shields/reduction
@@ -772,6 +779,91 @@ class GameEngine {
     }
 
     return results;
+  }
+
+  // ============================================================
+  // VALIDATE & EXECUTE: INTERACT (chests, runes, traps)
+  // ============================================================
+
+  validateInteract(hero, action) {
+    if (this.gs.bonusActionUsed) return { ok: false, error: 'Доп. действие уже использовано' };
+    const { targetRow, targetCol } = action;
+    if (targetRow === undefined || targetCol === undefined) return { ok: false, error: 'Не указана цель' };
+    const dist = Math.abs(hero.row - targetRow) + Math.abs(hero.col - targetCol);
+    if (dist > 1) return { ok: false, error: 'Объект слишком далеко (макс. 1 клетка)' };
+    const obj = this.gs.objects.find(o => o.row === targetRow && o.col === targetCol && !o.opened && !o.triggered && !o.activated);
+    if (!obj) return { ok: false, error: 'Нет объекта для взаимодействия' };
+    return { ok: true };
+  }
+
+  executeInteract(action) {
+    const hero = this.findHero(action.heroId);
+    const obj = this.gs.objects.find(o => o.row === action.targetRow && o.col === action.targetCol && !o.opened && !o.triggered && !o.activated);
+    if (!obj) return { type: 'interact', success: false, message: 'Объект не найден' };
+
+    const LootGenerator = require('./LootGenerator');
+    const result = { type: 'interact', heroId: hero.id, heroName: hero.name, objectType: obj.type, objectId: obj.id };
+
+    switch (obj.type) {
+      case 'chest': {
+        obj.opened = true;
+        const loot = LootGenerator.generateChestLoot ? LootGenerator.generateChestLoot('normal') : { items: [], silver: 10 };
+        result.loot = loot;
+        result.message = `${hero.name} открывает сундук! ${loot.items?.length ? loot.items.map(i => i.name).join(', ') : ''} ${loot.silver ? '+' + loot.silver + ' серебра' : ''}`;
+        // Add loot to hero
+        if (loot.silver) hero.silver = (hero.silver || 0) + loot.silver;
+        if (loot.gold) hero.gold = (hero.gold || 0) + loot.gold;
+        if (loot.items) loot.items.forEach(item => hero.inventory.push(item));
+        this.addLog(`📦 ${result.message}`, 'log-loot');
+        break;
+      }
+      case 'rune': {
+        obj.activated = true;
+        obj.discovered = true;
+        const runeType = obj.runeType || 'wisdom';
+        const effects = {
+          flame: { stat: 'attack', bonus: 2, msg: 'Руна Пламени! +2 к атаке до конца миссии' },
+          ice: { stat: 'armor', bonus: 2, msg: 'Руна Льда! +2 к броне до конца миссии' },
+          storm: { stat: 'agility', bonus: 2, msg: 'Руна Шторма! +2 к ловкости до конца миссии' },
+          wisdom: { stat: 'intellect', bonus: 2, msg: 'Руна Мудрости! +2 к интеллекту до конца миссии' },
+        };
+        const eff = effects[runeType] || effects.wisdom;
+        hero[eff.stat] = (hero[eff.stat] || 0) + eff.bonus;
+        result.message = `${hero.name} активирует ${obj.name || 'руну'}! ${eff.msg}`;
+        this.addLog(`🔮 ${result.message}`, 'log-loot');
+        break;
+      }
+      case 'trap': {
+        obj.triggered = true;
+        obj.discovered = true;
+        // Disarm check: d20 + agility vs DC 12
+        const roll = this.rollDice(20);
+        const dc = 12;
+        const bonus = hero.agility || 0;
+        if (roll + bonus >= dc) {
+          result.disarmed = true;
+          result.message = `${hero.name} обезвреживает ловушку! (d20=${roll}+${bonus}=${roll + bonus} ≥ ${dc})`;
+          this.addLog(`🪤 ${result.message}`, 'log-action');
+        } else {
+          const dmg = obj.trapType === 'rift' ? 15 : obj.trapType === 'snare' ? 8 : 4;
+          hero.hp = Math.max(0, hero.hp - dmg);
+          result.disarmed = false;
+          result.damage = dmg;
+          result.message = `${hero.name} активирует ловушку! ${dmg} урона (d20=${roll}+${bonus}=${roll + bonus} < ${dc})`;
+          this.addLog(`⚡ ${result.message}`, 'log-damage');
+          if (hero.hp <= 0) { hero.alive = false; this.addLog(`${hero.name} погибает!`, 'log-kill'); }
+        }
+        break;
+      }
+      default:
+        result.message = 'Неизвестный объект';
+    }
+
+    // Mark bonus action used
+    this.gs.bonusActionUsed = true;
+    hero.bonusActionUsed = true;
+
+    return result;
   }
 
   // ============================================================
@@ -1188,12 +1280,12 @@ class GameEngine {
 
     this.gs.heroes.forEach(h => {
       if (this.gs.combatHeroes.includes(h.id)) {
-        let bonus = 10;
-        if (h.surpriseAttack) bonus += SURPRISE_INITIATIVE_BONUS;
+        const agilityBonus = h.agility || 3;
+        const surpriseBonus = h.surpriseAttack ? SURPRISE_INITIATIVE_BONUS : 0;
         const roll = this.rollDice(6);
         participants.push({
           entityId: h.id, type: 'hero',
-          initiative: bonus + roll, roll,
+          initiative: agilityBonus + surpriseBonus + roll, roll,
         });
       }
     });
@@ -1273,6 +1365,45 @@ class GameEngine {
     // Generate match summary
     const summary = this.generateMatchSummary(result);
 
+    // Distribute rewards on victory
+    const rewards = { xp: 0, silver: 0, gold: 0, items: [] };
+    if (result === 'victory') {
+      const LootGenerator = require('./LootGenerator');
+      const aliveHeroes = this.gs.heroes.filter(h => h.hp > 0 && h.alive !== false);
+      const killedMonsters = this.gs.monsters.filter(m => m.hp <= 0 && !m.friendly);
+
+      // XP from killed monsters
+      let totalXp = 0;
+      let totalSilver = 0;
+      killedMonsters.forEach(m => {
+        totalXp += m.xpReward || 20;
+        totalSilver += (m.goldMin || 5) + Math.floor(Math.random() * ((m.goldMax || 15) - (m.goldMin || 5)));
+      });
+
+      // Distribute evenly among alive heroes
+      const xpPerHero = Math.ceil(totalXp / Math.max(1, aliveHeroes.length));
+      const silverPerHero = Math.ceil(totalSilver / Math.max(1, aliveHeroes.length));
+      aliveHeroes.forEach(h => {
+        h.xp = (h.xp || 0) + xpPerHero;
+        h.silver = (h.silver || 0) + silverPerHero;
+      });
+
+      // Generate monster loot
+      killedMonsters.forEach(m => {
+        const lootTier = m.isBoss ? 'boss' : (m.hp >= 40 ? 'elite' : 'common');
+        const loot = LootGenerator.generateMonsterLoot ? LootGenerator.generateMonsterLoot(lootTier) : null;
+        if (loot?.items?.length && aliveHeroes.length > 0) {
+          const recipient = aliveHeroes[Math.floor(Math.random() * aliveHeroes.length)];
+          loot.items.forEach(item => recipient.inventory.push(item));
+          rewards.items.push(...loot.items);
+        }
+      });
+
+      rewards.xp = xpPerHero;
+      rewards.silver = silverPerHero;
+      this.addLog(`🏆 Победа! +${xpPerHero} XP, +${silverPerHero} серебра${rewards.items.length ? ', ' + rewards.items.map(i => i.name).join(', ') : ''}`, 'log-loot');
+    }
+
     this.addLog(result === 'victory'
       ? 'Бой окончен! Все враги повержены.'
       : 'Бой окончен. Герои пали...', 'log-discovery');
@@ -1281,6 +1412,7 @@ class GameEngine {
       type: 'combat_ended',
       result,
       summary,
+      rewards,
       matchStats: this.gs.matchStats,
     };
   }
@@ -1847,10 +1979,10 @@ const TRAP_TYPES = {
 const TRAP_TYPE_KEYS = Object.keys(TRAP_TYPES);
 
 const CLASS_BASE_STATS = {
-  warrior: { label: 'W', color: '#d4a030', moveRange: 2, vision: 4, attack: 5, agility: 3, armor: 4, intellect: 2, wisdom: 2, charisma: 3, hp: 30, maxHp: 30, mp: 20, maxMp: 20, spells: [] },
-  mage:    { label: 'M', color: '#5a7fcc', moveRange: 2, vision: 5, attack: 3, agility: 5, armor: 1, intellect: 6, wisdom: 4, charisma: 3, hp: 20, maxHp: 20, mp: 30, maxMp: 30, spells: ['resurrection'] },
-  priest:  { label: 'P', color: '#8fbc8f', moveRange: 2, vision: 4, attack: 2, agility: 4, armor: 2, intellect: 4, wisdom: 6, charisma: 5, hp: 30, maxHp: 30, mp: 40, maxMp: 40, spells: [] },
-  bard:    { label: 'B', color: '#c77dba', moveRange: 3, vision: 4, attack: 3, agility: 4, armor: 2, intellect: 4, wisdom: 3, charisma: 6, hp: 25, maxHp: 25, mp: 30, maxMp: 30, spells: [] },
+  warrior: { label: 'W', color: '#d4a030', moveRange: 4, vision: 4, attack: 5, agility: 3, armor: 4, intellect: 2, wisdom: 2, charisma: 3, hp: 30, maxHp: 30, mp: 20, maxMp: 20, spells: [] },
+  mage:    { label: 'M', color: '#5a7fcc', moveRange: 3, vision: 5, attack: 3, agility: 5, armor: 1, intellect: 6, wisdom: 4, charisma: 3, hp: 20, maxHp: 20, mp: 30, maxMp: 30, spells: ['resurrection'] },
+  priest:  { label: 'P', color: '#8fbc8f', moveRange: 3, vision: 4, attack: 2, agility: 4, armor: 2, intellect: 4, wisdom: 6, charisma: 5, hp: 30, maxHp: 30, mp: 40, maxMp: 40, spells: [] },
+  bard:    { label: 'B', color: '#c77dba', moveRange: 4, vision: 4, attack: 3, agility: 4, armor: 2, intellect: 4, wisdom: 3, charisma: 6, hp: 25, maxHp: 25, mp: 30, maxMp: 30, spells: [] },
 };
 
 const RACE_PASSIVES = {

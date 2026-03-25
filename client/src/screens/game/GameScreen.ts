@@ -231,12 +231,18 @@ function updateHUD() {
   el('move-badge')!.textContent = String(steps);
   el('gold-display')!.textContent = String(myHero?.silver || myHero?.gold || 0);
 
-  // Disable move button when movement used
+  // Disable buttons when actions used
   const moveBtn = el('btn-move');
   if (moveBtn) {
     const moveUsed = myHero?.moveUsed || gs.moveUsed || steps <= 0;
     moveBtn.classList.toggle('action-btn--disabled', moveUsed);
   }
+  const actionUsed = myHero?.actionUsed || gs.actionUsed;
+  const bonusUsed = myHero?.bonusActionUsed || gs.bonusActionUsed;
+  el('btn-attack')?.classList.toggle('action-btn--disabled', !!actionUsed);
+  el('btn-ability')?.classList.toggle('action-btn--disabled', !!actionUsed);
+  el('btn-item')?.classList.toggle('action-btn--disabled', !!bonusUsed);
+  el('btn-interact')?.classList.toggle('action-btn--disabled', !!bonusUsed);
 
   // Turn name
   const turnEl = el('turn-name')!;
@@ -328,6 +334,11 @@ function renderMap() {
         const range = myHero.equipment?.weapon?.attackRange || myHero.equipment?.weapon?.range || 1;
         if (dist <= range) cls += ' cell-attackable';
       }
+      // Interact highlight: adjacent objects (chests, runes, traps)
+      if (myHero && actionMode === 'interact' && obj && fogV > 0) {
+        const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
+        if (dist <= 1) cls += ' cell-interactable';
+      }
 
       let content = '';
       if (hero) {
@@ -390,10 +401,10 @@ function onCellClick(x: number, y: number) {
     return;
   }
 
-  // Click on object → interact
-  const obj = gs.objects?.find((o: any) => o.col === x && o.row === y && (o.discovered !== false) && !o.opened && !o.triggered);
-  if (obj) {
-    sock.emit('action-request', { type: 'interact', targetId: obj.id });
+  // Click on object → interact (send coordinates for server)
+  const obj = gs.objects?.find((o: any) => o.col === x && o.row === y && (o.discovered !== false) && !o.opened && !o.triggered && !o.activated);
+  if (obj && actionMode === 'interact') {
+    sock.emit('action-request', { type: 'interact', targetRow: y, targetCol: x, targetId: obj.id });
     return;
   }
 
@@ -451,7 +462,7 @@ function setupActions(isSolo: boolean, isHost: boolean) {
     document.getElementById(`btn-${id}`)?.addEventListener('click', () => {
       if (id === 'ability') { showAbilityPopup(); return; }
       if (id === 'item') { showItemPopup(); return; }
-      if (id === 'interact') { showInteractPopup(); return; }
+      if (id === 'interact') { actionMode = 'interact'; document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active')); document.getElementById('btn-interact')?.classList.add('action-btn--active'); if (gs) renderMap(); return; }
       if (id === 'search') { sock?.emit('action-request', { type: 'search' }); return; }
       actionMode = id;
       document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active'));

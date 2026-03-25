@@ -9,10 +9,10 @@ for (let lvl = 2; lvl <= 50; lvl++) {
 
 // ── Class defaults ───────────────────────────────────────────────────
 const CLASS_DEFAULTS = {
-  warrior: { hp: 30, mp: 20, moveRange: 2, vision: 4 },
-  mage:    { hp: 20, mp: 30, moveRange: 2, vision: 5 },
-  priest:  { hp: 30, mp: 40, moveRange: 2, vision: 4 },
-  bard:    { hp: 25, mp: 30, moveRange: 3, vision: 4 },
+  warrior: { hp: 30, mp: 20, moveRange: 4, vision: 4 },
+  mage:    { hp: 20, mp: 30, moveRange: 3, vision: 5 },
+  priest:  { hp: 30, mp: 40, moveRange: 3, vision: 4 },
+  bard:    { hp: 25, mp: 30, moveRange: 4, vision: 4 },
 };
 
 // ── Racial stat bonuses [atk, agi, arm, int, wis, cha] + extras ─────
@@ -35,7 +35,7 @@ const RACIAL_BONUSES = {
 };
 
 // ── Combat constants ─────────────────────────────────────────────────
-const BASE_MOVE_RANGE = 2;
+const BASE_MOVE_RANGE = 4;
 const OFFROAD_MOVE_RANGE = 1;
 const ENCOUNTER_RANGE = 3;
 const COMBAT_ZONE_RANGE = 4;
