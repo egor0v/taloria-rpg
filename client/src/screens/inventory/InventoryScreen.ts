@@ -237,10 +237,32 @@ function stackItems(items: any[]): any[] {
   return result;
 }
 
+// Normalize legacy slot names from DB to UI slot names
+function normalizeEquipment(eq: any): any {
+  if (!eq) return {};
+  const out = { ...eq };
+  // chest → armor (рубаха/броня хранились как "chest")
+  if (out.chest && !out.armor) { out.armor = out.chest; delete out.chest; }
+  // pants stored under "gloves" if item is actually pants
+  if (out.gloves && !out.pants && (out.gloves.slot === 'gloves' && (out.gloves.type === 'pants' || out.gloves.name?.toLowerCase().includes('штан')))) {
+    out.pants = out.gloves; delete out.gloves;
+  }
+  return out;
+}
+
+// Normalize item slot for equip matching
+function normalizeSlot(slot: string): string {
+  if (slot === 'chest') return 'armor';
+  if (slot === 'necklace') return 'amulet';
+  return slot;
+}
+
 function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement) {
   const clsName = CLS_NAMES[hero.cls]?.[hero.gender] || hero.cls;
   const raceName = RACE_NAMES[hero.race]?.[hero.gender] || hero.race;
-  const equipment = hero.equipment || {};
+  // Normalize equipment slots from DB
+  hero.equipment = normalizeEquipment(hero.equipment);
+  const equipment = hero.equipment;
   const inventory = stackItems(hero.inventory || []);
   const stash = stackItems(hero.stash || []);
   const abilities = hero.abilities || [];
@@ -602,17 +624,17 @@ function setupDragDrop(body: HTMLElement, hero: any, rootContainer: HTMLElement)
       if (dragData.zone !== 'inventory') return; // can only equip from inventory
 
       // Check slot compatibility
-      const itemSlot = dragData.item.slot || 'none';
+      const itemSlot = normalizeSlot(dragData.item.slot || 'none');
       const itemType = dragData.item.type || '';
       const SLOT_ACCEPTS: Record<string, (s: string, t: string) => boolean> = {
         weapon: (s, t) => s === 'weapon' || t === 'weapon',
         shield: (s, t) => s === 'shield' || t === 'shield',
         helmet: (s, t) => s === 'helmet' || t === 'helmet',
-        armor: (s, t) => s === 'armor' || t === 'armor',
+        armor: (s, t) => s === 'armor' || s === 'chest' || t === 'armor',
         boots: (s, t) => s === 'boots' || t === 'boots',
-        pants: (s, t) => s === 'pants' || t === 'pants',
+        pants: (s, t) => s === 'pants' || s === 'gloves' || t === 'pants',
         ring: (s, t) => s === 'ring' || t === 'jewelry' || t === 'ring',
-        amulet: (s, t) => s === 'amulet' || t === 'jewelry' || t === 'amulet',
+        amulet: (s, t) => s === 'amulet' || s === 'necklace' || t === 'jewelry' || t === 'amulet',
         cloak: (s, t) => s === 'cloak' || t === 'cloak',
         gloves: (s, t) => s === 'gloves' || ['tool', 'potion', 'scroll', 'food'].includes(t),
       };
@@ -672,7 +694,8 @@ function showItemDescription(item: any, source: string = 'inventory', idx: numbe
   if (!el) return;
 
   const rarityNames: Record<string, string> = { common: 'Обычный', uncommon: 'Необычный', rare: 'Редкий', epic: 'Эпический', legendary: 'Легендарный' };
-  const canEquip = item.slot && item.slot !== 'none' && source === 'inventory';
+  const normalizedItemSlot = normalizeSlot(item.slot || 'none');
+  const canEquip = normalizedItemSlot && normalizedItemSlot !== 'none' && source === 'inventory';
   const canUnequip = source === 'equipment';
   const canMoveToStash = source === 'inventory';
   const canMoveToInventory = source === 'stash';
@@ -700,7 +723,7 @@ function showItemDescription(item: any, source: string = 'inventory', idx: numbe
   // Equip
   document.getElementById('btn-equip')?.addEventListener('click', async () => {
     if (!hero || !container) return;
-    const slot = item.slot;
+    const slot = normalizeSlot(item.slot);
     // Move current equipped item to inventory
     if (hero.equipment[slot] && hero.equipment[slot].name) {
       hero.inventory.push({ ...hero.equipment[slot] });

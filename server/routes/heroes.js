@@ -11,6 +11,14 @@ const { MAX_FREE_HEROES, XP_THRESHOLDS, LEVEL_UP_BONUSES, TRADE_POINT_COSTS } = 
 
 const router = express.Router();
 
+// Normalize legacy equipment slot names: chest→armor, necklace→amulet
+function normalizeEquipment(eq) {
+  if (!eq) return eq;
+  if (eq.chest && !eq.armor) { eq.armor = eq.chest; delete eq.chest; }
+  if (eq.necklace && !eq.amulet) { eq.amulet = eq.necklace; delete eq.necklace; }
+  return eq;
+}
+
 // GET /api/heroes
 // Enrich items with images from GameItem DB
 let _imgCache = null;
@@ -57,6 +65,7 @@ router.get('/', auth(), async (req, res, next) => {
     const lookup = await getImgLookup();
     const enriched = heroes.map(h => {
       const obj = h.toObject();
+      normalizeEquipment(obj.equipment);
       enrichItemImages(obj, lookup);
       return obj;
     });
@@ -134,6 +143,7 @@ router.get('/:id', auth(), async (req, res, next) => {
     const hero = await Hero.findOne({ _id: req.params.id, userId: req.user.userId });
     if (!hero) return res.status(404).json({ error: 'Герой не найден' });
     const obj = hero.toObject();
+    normalizeEquipment(obj.equipment);
     const lookup = await getImgLookup();
     enrichItemImages(obj, lookup);
     res.json({ hero: obj });
