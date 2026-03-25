@@ -364,6 +364,9 @@ class GameEngine {
     // Update fog of war around new position
     this._updateFogForHero(hero);
 
+    // Check fire zone — apply burning status
+    this._checkFireZone(hero);
+
     // Check for traps, encounters, etc. (simplified)
     const events = [];
 
@@ -994,6 +997,7 @@ class GameEngine {
           if (leapStep && !this.isCellOccupied(leapStep.row, leapStep.col, mon.id)) {
             mon.row = leapStep.row;
             mon.col = leapStep.col;
+            this._checkFireZone(mon);
             result.actions.push({ type: 'leap', row: mon.row, col: mon.col });
           }
         }
@@ -1015,6 +1019,7 @@ class GameEngine {
           if (!this.isCellOccupied(step.row, step.col, mon.id)) {
             mon.row = step.row;
             mon.col = step.col;
+            this._checkFireZone(mon);
             result.actions.push({ type: 'move', row: mon.row, col: mon.col, path: path.slice(0, stepIdx + 1) });
           }
         }
@@ -1733,6 +1738,21 @@ class GameEngine {
             if (m.row === r && m.col === c && m.alive) m.discovered = true;
           });
         }
+      }
+    }
+  }
+
+  /**
+   * Check if entity is on a fire zone (cell value 4) and apply burning
+   */
+  _checkFireZone(entity) {
+    if (!entity || !entity.alive) return;
+    const cellVal = this.gs.map?.[entity.row]?.[entity.col];
+    if (cellVal === 4 || cellVal === 'fire') {
+      const hasBurning = (entity.statusEffects || []).find(e => e.type === 'burning');
+      if (!hasBurning) {
+        applyStatus(entity, 'burning', { damagePerTurn: 2, duration: 3 });
+        this.addLog(`${entity.name} попадает в огненную зону! 🔥 Горение на 3 хода`, 'log-damage');
       }
     }
   }

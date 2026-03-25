@@ -794,7 +794,7 @@ function openEditModal(apiUrl: string, fields: FieldDef[], item: any | null, tit
             const w = grid[0]?.length || 15;
             const cellTypes = f.key === 'roadMap'
               ? [{ v: 0, label: 'Пусто', color: '#1a1a1a' }, { v: 1, label: 'Дорога', color: '#8B7355' }, { v: 2, label: 'Бездорожье', color: '#4a5e3a' }]
-              : [{ v: 0, label: 'Проходимо', color: '#3a3228' }, { v: 1, label: 'Стена', color: '#0a0806' }, { v: 2, label: 'С помехой', color: '#5a4d3a' }, { v: 3, label: 'Вода', color: '#1a3050' }, { v: 4, label: 'Огонь', color: '#8B2500' }];
+              : [{ v: 0, label: 'Проходимо', color: '#3a3228' }, { v: 1, label: 'Стена', color: '#0a0806' }, { v: 2, label: 'С помехой', color: '#5a4d3a' }, { v: 3, label: 'Вода', color: '#1a3050' }, { v: 4, label: '🔥 Огонь', color: '#cc2200' }];
             return `<div class="form-group">
               <label>${f.label}</label>
               <div class="grid-editor-controls">
@@ -1053,7 +1053,7 @@ function openGrantModal(userId: string, userName: string) {
 // GRID EDITOR
 // ===========================
 function initGridEditors(modal: HTMLElement, item: any | null) {
-  const CELL_COLORS_MAP: Record<number, string> = { 0: '#3a3228', 1: '#0a0806', 2: '#5a4d3a', 3: '#1a3050' };
+  const CELL_COLORS_MAP: Record<number, string> = { 0: '#3a3228', 1: '#0a0806', 2: '#5a4d3a', 3: '#1a3050', 4: '#cc2200' };
   const CELL_COLORS_ROAD: Record<number, string> = { 0: '#1a1a1a', 1: '#8B7355', 2: '#4a5e3a' };
 
   modal.querySelectorAll('.grid-canvas').forEach(canvasEl => {
@@ -1165,16 +1165,42 @@ function initGridEditors(modal: HTMLElement, item: any | null) {
       });
     });
 
-    // Width/Height change → resize grid
+    // Width change → auto-compute height from bg image aspect ratio or 4:3
     const heightInput = modal.querySelector(`.grid-height-input[data-grid="${fieldKey}"]`) as HTMLInputElement;
-    const resizeGrid = () => {
+    const recalcHeight = () => {
       width = Math.max(5, Math.min(80, parseInt(widthInput?.value || '15') || 15));
-      height = Math.max(5, Math.min(80, parseInt(heightInput?.value || String(height)) || height));
+      // Try to get aspect ratio from background image
+      const bgUrl = bgInput?.value || '';
+      if (bgUrl) {
+        const img = new Image();
+        img.onload = () => {
+          const ratio = img.naturalHeight / img.naturalWidth;
+          height = Math.max(5, Math.round(width * ratio));
+          if (heightInput) heightInput.value = String(height);
+          gridData = buildGrid(width, height, gridData);
+          renderGrid();
+        };
+        img.onerror = () => {
+          height = Math.max(5, Math.ceil(width * 0.75));
+          if (heightInput) heightInput.value = String(height);
+          gridData = buildGrid(width, height, gridData);
+          renderGrid();
+        };
+        img.src = bgUrl;
+      } else {
+        height = Math.max(5, Math.ceil(width * 0.75));
+        if (heightInput) heightInput.value = String(height);
+        gridData = buildGrid(width, height, gridData);
+        renderGrid();
+      }
+    };
+    widthInput?.addEventListener('change', recalcHeight);
+    // Allow manual height override
+    heightInput?.addEventListener('change', () => {
+      height = Math.max(5, Math.min(80, parseInt(heightInput.value) || height));
       gridData = buildGrid(width, height, gridData);
       renderGrid();
-    };
-    widthInput?.addEventListener('change', resizeGrid);
-    heightInput?.addEventListener('change', resizeGrid);
+    });
 
     renderGrid();
   });

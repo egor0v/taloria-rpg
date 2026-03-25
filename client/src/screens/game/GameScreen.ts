@@ -260,6 +260,7 @@ function renderMap() {
       const road = terrain?.[y]?.[x];
       const fogV = fog?.[y]?.[x] ?? 2;
       const isWall = cell === 0 || cell === 'wall';
+      const isFire = cell === 4 || cell === 'fire';
       const isWater = cell === 3 || cell === 'water' || road === 'water';
       const isRoad = cell === 1 || road === 1 || road === 'road';
       const isOffroad = cell === 2 || road === 2 || road === 'offroad';
@@ -274,6 +275,7 @@ function renderMap() {
 
       let cls = 'map-cell';
       if (isWall) cls += ' cell-wall';
+      else if (isFire) cls += ' cell-fire';
       else if (isWater) cls += ' cell-water';
       else if (isRoad) cls += ' cell-road';
       else if (isOffroad) cls += ' cell-offroad';
