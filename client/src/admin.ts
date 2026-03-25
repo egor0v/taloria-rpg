@@ -168,8 +168,7 @@ const FIELDS_MAP: FieldDef[] = [
   { key: 'description', label: 'Описание', type: 'textarea' },
   { key: 'maxPlayers', label: 'Макс. игроков', type: 'number', tableCol: true },
   { key: 'bgImage', label: 'Фон (URL)', type: 'text' },
-  { key: 'mapData', label: 'Карта (terrain)', type: 'grid-editor' },
-  { key: 'roadMap', label: 'Дороги (road)', type: 'grid-editor' },
+  { key: 'mapData', label: 'Разметка карты', type: 'grid-editor' },
   { key: 'active', label: 'Активна', type: 'checkbox', tableCol: true },
 ];
 
@@ -792,9 +791,13 @@ function openEditModal(apiUrl: string, fields: FieldDef[], item: any | null, tit
             const grid = val as any[][] || [];
             const h = grid.length || 10;
             const w = grid[0]?.length || 15;
-            const cellTypes = f.key === 'roadMap'
-              ? [{ v: 0, label: 'Пусто', color: '#1a1a1a' }, { v: 1, label: 'Дорога', color: '#8B7355' }, { v: 2, label: 'Бездорожье', color: '#4a5e3a' }]
-              : [{ v: 0, label: 'Проходимо', color: '#3a3228' }, { v: 1, label: 'Стена', color: '#0a0806' }, { v: 2, label: 'С помехой', color: '#5a4d3a' }, { v: 3, label: 'Вода', color: '#1a3050' }, { v: 4, label: '🔥 Огонь', color: '#cc2200' }];
+            const cellTypes = [
+              { v: 0, label: 'Проходимо', color: '#3a3228' },
+              { v: 1, label: '🧱 Стена', color: '#0a0806' },
+              { v: 2, label: '⚠ Помеха (-1 шаг)', color: '#5a4d3a' },
+              { v: 3, label: '💧 Вода', color: '#1a3050' },
+              { v: 4, label: '🔥 Огонь', color: '#cc2200' },
+            ];
             return `<div class="form-group">
               <label>${f.label}</label>
               <div class="grid-editor-controls">

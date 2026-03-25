@@ -48,6 +48,14 @@ export function renderGameScreen(container: HTMLElement): void {
   sock.on('action-result', (data: any) => {
     log(fmtAction(data));
     if (data.gameState) { gs = data.gameState; onUpdate(); }
+    // Check for hazard events requiring dice rolls
+    if (data.result?.events) {
+      for (const evt of data.result.events) {
+        if (evt.type === 'water_check') {
+          showDiceCheckPopup(evt);
+        }
+      }
+    }
   });
   sock.on('action-error', (data: any) => log(`❌ ${data.error || data.message || 'Ошибка'}`, 'error'));
   sock.on('ai-narration', (data: any) => { setNarration(data.text); log(`📜 ${data.text}`, 'narration'); });
@@ -259,11 +267,10 @@ function renderMap() {
       const cell = map[y]?.[x];
       const road = terrain?.[y]?.[x];
       const fogV = fog?.[y]?.[x] ?? 2;
-      const isWall = cell === 0 || cell === 'wall';
+      const isWall = cell === 1 || cell === 'wall';
+      const isObstacle = cell === 2 || cell === 'obstacle';
+      const isWater = cell === 3 || cell === 'water';
       const isFire = cell === 4 || cell === 'fire';
-      const isWater = cell === 3 || cell === 'water' || road === 'water';
-      const isRoad = cell === 1 || road === 1 || road === 'road';
-      const isOffroad = cell === 2 || road === 2 || road === 'offroad';
 
       // Server uses row/col; row=y, col=x
       const hero = heroes?.find((h: any) => h.alive !== false && h.hp > 0 && (h.col === x && h.row === y));
@@ -277,8 +284,7 @@ function renderMap() {
       if (isWall) cls += ' cell-wall';
       else if (isFire) cls += ' cell-fire';
       else if (isWater) cls += ' cell-water';
-      else if (isRoad) cls += ' cell-road';
-      else if (isOffroad) cls += ' cell-offroad';
+      else if (isObstacle) cls += ' cell-obstacle';
       else cls += ' cell-floor';
 
       // Walls are always visible (just impassable), fog only hides floor cells
@@ -749,6 +755,74 @@ function applyZoom() {
 // ═══════════════════════════════════
 function getMyHero() {
   return gs?.heroes?.find((h: any) => h._ownerId === user?._id || h.userId === user?._id);
+}
+
+// ═══════════════════════════════════
+// DICE CHECK POPUP (water, traps, etc.)
+// ═══════════════════════════════════
+function showDiceCheckPopup(evt: any) {
+  // Remove any existing popup
+  document.querySelector('.dice-popup-overlay')?.remove();
+
+  const diceType = evt.diceType || 'd20';
+  const dc = evt.dc || 10;
+  const maxVal = parseInt(diceType.replace('d', '')) || 20;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'dice-popup-overlay';
+  overlay.innerHTML = `
+    <div class="dice-popup">
+      <div class="dice-popup-title">⚠️ Проверка!</div>
+      <p class="dice-popup-message">${evt.message || 'Бросьте кубик'}</p>
+      <div class="dice-popup-dice-wrap">
+        <div class="dice-popup-dice" id="dice-anim">${diceType.toUpperCase()}</div>
+      </div>
+      <p class="dice-popup-dc">Нужно: ${diceType} ≥ ${dc}</p>
+      <div class="dice-popup-result" id="dice-result" style="display:none"></div>
+      <button class="dice-popup-btn" id="btn-roll-dice">🎲 Бросить кубик</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const diceEl = document.getElementById('dice-anim')!;
+  const resultEl = document.getElementById('dice-result')!;
+  const btn = document.getElementById('btn-roll-dice')!;
+
+  btn.addEventListener('click', () => {
+    btn.style.display = 'none';
+    // Shake animation
+    diceEl.classList.add('dice-shaking');
+    let shakeCount = 0;
+    const shakeInterval = setInterval(() => {
+      diceEl.textContent = String(Math.floor(Math.random() * maxVal) + 1);
+      shakeCount++;
+      if (shakeCount > 15) {
+        clearInterval(shakeInterval);
+        // Final roll
+        const roll = Math.floor(Math.random() * maxVal) + 1;
+        diceEl.classList.remove('dice-shaking');
+        diceEl.textContent = String(roll);
+        diceEl.classList.add(roll >= dc ? 'dice-success' : 'dice-fail');
+
+        const success = roll >= dc;
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = success
+          ? `<span class="dice-result-success">✅ ${roll} ≥ ${dc} — Успех!</span>`
+          : `<span class="dice-result-fail">❌ ${roll} < ${dc} — Провал!</span>`;
+
+        // Send result to server
+        sock?.emit('dice-check-result', {
+          sessionId: session?._id,
+          entityId: evt.entityId,
+          diceRoll: roll,
+          checkType: evt.type,
+        });
+
+        // Auto-close after 2s
+        setTimeout(() => overlay.remove(), 2500);
+      }
+    }, 80);
+  });
 }
 
 function setNarration(text: string) {

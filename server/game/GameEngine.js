@@ -364,11 +364,11 @@ class GameEngine {
     // Update fog of war around new position
     this._updateFogForHero(hero);
 
-    // Check fire zone — apply burning status
-    this._checkFireZone(hero);
+    // Check hazardous terrain (fire, water)
+    const hazardEvents = this._checkHazardousTerrain(hero);
 
     // Check for traps, encounters, etc. (simplified)
-    const events = [];
+    const events = [...hazardEvents];
 
     // In explore mode, check for monster aggro
     if (this.gs.mode === 'explore') {
@@ -1456,7 +1456,10 @@ class GameEngine {
           if (this.isCellOccupied(nr, nc, excludeId)) continue;
         }
 
-        const g = current.g + 1;
+        // Obstacle cells cost 2 steps instead of 1
+        const cellType = this.gs.map[nr][nc];
+        const stepCost = (cellType === 'obstacle' || cellType === 2) ? 2 : 1;
+        const g = current.g + stepCost;
         const existing = open.find(n => n.row === nr && n.col === nc);
         if (existing && g >= existing.g) continue;
 
@@ -1743,18 +1746,69 @@ class GameEngine {
   }
 
   /**
-   * Check if entity is on a fire zone (cell value 4) and apply burning
+   * Check hazardous terrain (fire, water) after entity moves
+   * Returns events array for client popups
    */
-  _checkFireZone(entity) {
-    if (!entity || !entity.alive) return;
+  _checkHazardousTerrain(entity) {
+    if (!entity || !entity.alive) return [];
     const cellVal = this.gs.map?.[entity.row]?.[entity.col];
+    const events = [];
+
+    // Fire zone: apply burning (2 HP/turn for 3 turns)
     if (cellVal === 4 || cellVal === 'fire') {
       const hasBurning = (entity.statusEffects || []).find(e => e.type === 'burning');
       if (!hasBurning) {
         applyStatus(entity, 'burning', { damagePerTurn: 2, duration: 3 });
-        this.addLog(`${entity.name} попадает в огненную зону! 🔥 Горение на 3 хода`, 'log-damage');
+        this.addLog(`${entity.name} попадает в огненную зону! 🔥 Горение на 3 хода (2 HP/ход)`, 'log-damage');
+        events.push({ type: 'fire', entityId: entity.id, entityName: entity.name });
       }
     }
+
+    // Water zone: drowning check d20
+    if (cellVal === 3 || cellVal === 'water') {
+      events.push({
+        type: 'water_check',
+        entityId: entity.id,
+        entityName: entity.name,
+        diceType: 'd20',
+        dc: 10,
+        message: `${entity.name} попадает в воду! Проверка утопления (d20 ≥ 10)`,
+      });
+    }
+
+    return events;
+  }
+
+  /**
+   * Process water check result (called from client after dice roll)
+   */
+  processWaterCheck(entityId, diceRoll) {
+    const entity = this.gs.heroes.find(h => h.id === entityId) ||
+                   this.gs.monsters.find(m => m.id === entityId);
+    if (!entity || !entity.alive) return { success: false };
+
+    const dc = 10;
+    const success = diceRoll >= dc;
+
+    if (success) {
+      this.addLog(`${entity.name} бросает ${diceRoll} — успешно переплывает! ✅`, 'log-action');
+      return { success: true, roll: diceRoll, dc, message: `${entity.name} переплывает (${diceRoll} ≥ ${dc})` };
+    } else {
+      // Failed: take damage and possibly drown
+      const dmg = Math.max(1, Math.floor(dc - diceRoll));
+      entity.hp = Math.max(0, entity.hp - dmg);
+      this.addLog(`${entity.name} бросает ${diceRoll} — тонет! Урон ${dmg} HP 💀`, 'log-damage');
+      if (entity.hp <= 0) {
+        entity.alive = false;
+        this.addLog(`${entity.name} утонул!`, 'log-kill');
+      }
+      return { success: false, roll: diceRoll, dc, damage: dmg, message: `${entity.name} тонет! (${diceRoll} < ${dc}) Урон: ${dmg}` };
+    }
+  }
+
+  // Legacy alias
+  _checkFireZone(entity) {
+    this._checkHazardousTerrain(entity);
   }
 
   addLog(message, type = 'log-action') {
@@ -1905,7 +1959,8 @@ GameEngine.initializeFromDB = async function (session) {
   let monsterIdx = 0;
 
   // ── Parse map grid ──
-  // Admin panel map format: 0=floor, 1=wall, 2=floor(alt), 3=monster, 4=chest, 5=trap, 6=rune
+  // Admin panel mapData format: 0=floor, 1=wall, 2=obstacle(slower), 3=water, 4=fire
+  // All entities (monsters, NPCs, chests, traps, runes) come from scenario zones
   for (let r = 0; r < ROWS; r++) {
     gs.map[r] = [];
     gs.fog[r] = [];
@@ -1914,60 +1969,29 @@ GameEngine.initializeFromDB = async function (session) {
       const t = mapData[r][c];
       gs.fog[r][c] = FOG_UNKNOWN;
 
-      // Terrain from roadMap
+      // Map cell type from admin:
+      // 0 = floor (fully walkable)
+      // 1 = wall (impassable, always visible)
+      // 2 = obstacle (walkable but costs extra step)
+      // 3 = water (walkable but dangerous — drowning check)
+      // 4 = fire (walkable but applies burning)
+      if (t === 1) {
+        gs.map[r][c] = 'wall';
+      } else if (t === 2) {
+        gs.map[r][c] = 'obstacle';
+      } else if (t === 3) {
+        gs.map[r][c] = 'water';
+      } else if (t === 4) {
+        gs.map[r][c] = 'fire';
+      } else {
+        gs.map[r][c] = 'floor';
+      }
+
+      // Terrain from roadMap (overlay layer)
       const terrainVal = roadMap[r] && roadMap[r][c];
       if (terrainVal === 'road' || terrainVal === 1) gs.terrain[r][c] = 'road';
-      else if (terrainVal === 'water' || terrainVal === TERRAIN_WATER) gs.terrain[r][c] = 'water';
-      else if (terrainVal === 'offroad') gs.terrain[r][c] = 'offroad';
-      else gs.terrain[r][c] = (terrainVal === 0 || terrainVal === 2) ? 'offroad' : 'offroad';
-
-      // Map cell: 1 = wall, everything else = floor
-      gs.map[r][c] = (t === 1) ? 'wall' : 'floor';
-
-      // Monster spawn from map (cell type 3)
-      if (t === 3) {
-        // Try to find a matching monster from pool
-        const pool = scenario.monsterPool || [];
-        let def = null;
-        // Check if any pool monster has this position
-        for (const poolEntry of pool) {
-          const type = typeof poolEntry === 'string' ? poolEntry : poolEntry?.type;
-          const positions = typeof poolEntry === 'object' ? poolEntry?.positions : null;
-          if (positions) {
-            const posMatch = positions.find(p => (p.y === r && p.x === c) || (p.row === r && p.col === c));
-            if (posMatch) {
-              def = findMonsterDef(type);
-              break;
-            }
-          }
-        }
-        if (!def) {
-          // Fallback: use first available monster type
-          const firstType = pool[0]?.type || pool[0] || 'goblin-warrior';
-          def = findMonsterDef(firstType) || findMonsterDef('goblin-warrior');
-        }
-        if (def) {
-          gs.monsters.push(_spawnMonster(def, monsterIdx, r, c, scenario.monsterOverrides));
-          monsterIdx++;
-        }
-      }
-
-      // Chest (cell type 4)
-      if (t === 4) {
-        gs.objects.push({ type: 'chest', label: '♦', row: r, col: c, opened: false, discovered: true, id: `obj-chest-${r}-${c}` });
-      }
-
-      // Trap (cell type 5)
-      if (t === 5) {
-        const tt = TRAP_TYPES[TRAP_TYPE_KEYS[Math.floor(Math.random() * TRAP_TYPE_KEYS.length)]];
-        gs.objects.push({ type: 'trap', trapType: tt.id, label: tt.label, name: tt.name, row: r, col: c, hidden: true, discovered: false, triggered: false, id: `obj-trap-${r}-${c}` });
-      }
-
-      // Rune (cell type 6)
-      if (t === 6) {
-        const rt = RUNE_TYPES[RUNE_TYPE_KEYS[Math.floor(Math.random() * RUNE_TYPE_KEYS.length)]];
-        gs.objects.push({ type: 'rune', runeType: rt.id, label: rt.label, name: rt.name, row: r, col: c, activated: false, hidden: true, discovered: false, id: `obj-rune-${r}-${c}` });
-      }
+      else if (terrainVal === 'offroad' || terrainVal === 2) gs.terrain[r][c] = 'offroad';
+      else gs.terrain[r][c] = 'offroad';
     }
   }
 

@@ -291,6 +291,36 @@ function setupGameHandler(io) {
       }
     });
 
+    // --- Dice check result (water drowning, etc.) ---
+    socket.on('dice-check-result', async ({ sessionId: reqSessionId, entityId, diceRoll, checkType }) => {
+      const sessionId = reqSessionId || socket.sessionId;
+      if (!sessionId) return;
+      try {
+        const gs = activeGames.get(sessionId);
+        if (!gs) return;
+        const session = await GameSession.findById(sessionId).lean();
+        const engine = getOrCreateEngine(sessionId, gs, session?.players || []);
+
+        let result;
+        if (checkType === 'water_check') {
+          result = engine.processWaterCheck(entityId, diceRoll);
+        }
+
+        activeGames.set(sessionId, engine.gs);
+        const payload = {
+          action: { type: 'dice-check' },
+          result,
+          gameState: engine.gs,
+          actionLog: engine.getActionLog(),
+        };
+        engine.actionLog = [];
+        gameNsp.to(`session:${sessionId}`).emit('action-result', payload);
+        debouncedSave(sessionId, engine.gs);
+      } catch (err) {
+        console.error('dice-check error:', err);
+      }
+    });
+
     // --- Init combat ---
     socket.on('init-combat', async ({ sessionId: reqSessionId, aggroMonsterIds }) => {
       const sessionId = reqSessionId || socket.sessionId;
