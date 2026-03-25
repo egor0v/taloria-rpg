@@ -108,9 +108,21 @@
 }
 
 .inv-stat-bonus {
-  color: #3acc60;
-  font-size: 0.75rem;
-  margin-left: 4px;
+  font-size: 0.7rem;
+  margin-left: 3px;
+  font-weight: 600;
+}
+.inv-stat-equip {
+  color: #3acc60; /* green — equipment bonus */
+}
+.inv-stat-ability {
+  color: #5b8fff; /* blue — ability bonus */
+}
+.inv-stat-penalty {
+  color: #ff4d4d; /* red — penalty */
+  font-size: 0.7rem;
+  margin-left: 3px;
+  font-weight: 600;
 }
 
 .inv-coins {

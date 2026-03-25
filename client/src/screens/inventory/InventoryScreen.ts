@@ -276,14 +276,62 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
 
           <div class="inv-stats">
             <h4 class="inv-section-title">ХАРАКТЕРИСТИКИ</h4>
-            ${Object.entries(STAT_NAMES).map(([key, label]) => {
-              const val = hero[key] || BASE_STATS;
-              const bonus = val - BASE_STATS;
-              return `<div class="inv-stat-row">
-                <span class="inv-stat-label">${label}</span>
-                <span class="inv-stat-val">${val}${bonus > 0 ? `<span class="inv-stat-bonus">+${bonus}</span>` : ''}</span>
-              </div>`;
-            }).join('')}
+            ${(() => {
+              // Calculate equipment bonuses
+              const equipBonus: Record<string, number> = {};
+              for (const [slot, item] of Object.entries(equipment)) {
+                if (!item?.stats) continue;
+                for (const [stat, val] of Object.entries(item.stats as Record<string, number>)) {
+                  equipBonus[stat] = (equipBonus[stat] || 0) + (val || 0);
+                }
+                // Weapon damage → attack bonus display
+                if (slot === 'weapon' && item.damage?.bonus) {
+                  equipBonus['attack'] = (equipBonus['attack'] || 0) + item.damage.bonus;
+                }
+              }
+
+              // Calculate ability bonuses (passive effects)
+              const abilityBonus: Record<string, number> = {};
+              for (const ab of [...(hero.abilities || []), ...(hero.baseAbilities || [])]) {
+                if (!ab?.effect) continue;
+                const e = ab.effect;
+                if (e.attackBonus) abilityBonus['attack'] = (abilityBonus['attack'] || 0) + e.attackBonus;
+                if (e.armorBonus) abilityBonus['armor'] = (abilityBonus['armor'] || 0) + e.armorBonus;
+                if (e.agilityBonus) abilityBonus['agility'] = (abilityBonus['agility'] || 0) + e.agilityBonus;
+                if (e.intellectBonus) abilityBonus['intellect'] = (abilityBonus['intellect'] || 0) + e.intellectBonus;
+                if (e.wisdomBonus) abilityBonus['wisdom'] = (abilityBonus['wisdom'] || 0) + e.wisdomBonus;
+                if (e.charismaBonus) abilityBonus['charisma'] = (abilityBonus['charisma'] || 0) + e.charismaBonus;
+                // Generic +all stats
+                if (e.allStats) {
+                  for (const s of ['attack','agility','armor','intellect','wisdom','charisma']) {
+                    abilityBonus[s] = (abilityBonus[s] || 0) + e.allStats;
+                  }
+                }
+              }
+
+              return Object.entries(STAT_NAMES).map(([key, label]) => {
+                const baseVal = hero[key] || BASE_STATS;
+                const eqB = equipBonus[key] || 0;
+                const abB = abilityBonus[key] || 0;
+                const totalBonus = eqB + abB;
+                const totalVal = baseVal + totalBonus;
+
+                let bonusHtml = '';
+                if (totalBonus > 0) {
+                  const parts: string[] = [];
+                  if (eqB > 0) parts.push(`<span class="inv-stat-bonus inv-stat-equip" title="Экипировка">+${eqB}</span>`);
+                  if (abB > 0) parts.push(`<span class="inv-stat-bonus inv-stat-ability" title="Способности">+${abB}</span>`);
+                  bonusHtml = parts.join(' ');
+                } else if (totalBonus < 0) {
+                  bonusHtml = `<span class="inv-stat-penalty">${totalBonus}</span>`;
+                }
+
+                return `<div class="inv-stat-row">
+                  <span class="inv-stat-label">${label}</span>
+                  <span class="inv-stat-val">${totalVal} ${bonusHtml}</span>
+                </div>`;
+              }).join('');
+            })()}
           </div>
 
           <div class="inv-coins">
