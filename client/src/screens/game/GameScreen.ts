@@ -246,10 +246,32 @@ function updateHUD() {
 
   // Auto-switch from disabled mode to first available
   if (moveUsed && actionMode === 'move') {
-    if (!actionUsed) { actionMode = 'attack'; el('btn-attack')?.classList.add('action-btn--active'); }
-    else if (!bonusUsed) { actionMode = 'interact'; }
+    if (!actionUsed) actionMode = 'attack';
+    else if (!bonusUsed) actionMode = 'interact';
+    else actionMode = 'move'; // all used
     document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active'));
     document.getElementById(`btn-${actionMode}`)?.classList.add('action-btn--active');
+  }
+
+  // Show "no actions left" popup when all actions exhausted
+  if (moveUsed && actionUsed && bonusUsed && !document.querySelector('.no-actions-popup')) {
+    const popup = document.createElement('div');
+    popup.className = 'no-actions-popup';
+    popup.innerHTML = `
+      <div class="no-actions-card">
+        <p class="no-actions-text">У вас больше не осталось действий</p>
+        <button class="dice-popup-btn" id="btn-end-turn-popup">⏭ Завершить ход</button>
+      </div>
+    `;
+    document.querySelector('.game-map-area')?.appendChild(popup);
+    document.getElementById('btn-end-turn-popup')?.addEventListener('click', () => {
+      sock?.emit('action-request', { type: 'end-turn' });
+      popup.remove();
+    });
+  }
+  // Remove popup if actions restored (new turn)
+  if (!moveUsed || !actionUsed || !bonusUsed) {
+    document.querySelector('.no-actions-popup')?.remove();
   }
 
   // Turn name
@@ -369,8 +391,12 @@ function renderMap() {
       } else if (friendlyNpc) {
         content = `<span class="token-object token-npc" title="${friendlyNpc.name}">${friendlyNpc.label || '🧝'}</span>`;
       } else if (obj && fogV > 0) {
-        const icons: Record<string, string> = { chest: '📦', trap: '⚡', rune: '🔮', questNpc: '❗' };
-        content = `<span class="token-object" title="${obj.name || obj.type}">${icons[obj.type] || '❓'}</span>`;
+        const objImgs: Record<string, string> = { chest: '/img/игровые предметы/chest.png' };
+        const objIcons: Record<string, string> = { chest: '📦', trap: '⚡', rune: '🔮', questNpc: '❗' };
+        const imgSrc = objImgs[obj.type];
+        content = imgSrc
+          ? `<span class="token-object" title="${obj.name || obj.type}"><img src="${imgSrc}" alt="" onerror="this.parentElement.textContent='${objIcons[obj.type]||'❓'}'" /></span>`
+          : `<span class="token-object" title="${obj.name || obj.type}">${objIcons[obj.type] || '❓'}</span>`;
       }
 
       html += `<div class="${cls}" data-x="${x}" data-y="${y}">${content}</div>`;

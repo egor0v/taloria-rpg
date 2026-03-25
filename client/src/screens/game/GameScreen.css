@@ -120,7 +120,9 @@
 .token-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .token-hp-bar { position: absolute; bottom: -3px; left: 2px; right: 2px; height: 3px; background: var(--cta); border-radius: 2px; }
 .token-hp-monster { background: var(--red); }
-.token-object { font-size: 0.7rem; opacity: 0.8; }
+.token-object { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+.token-object img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.token-npc { font-size: 1.1rem; }
 
 /* ─── RIGHT PANEL (log + chat) ─── */
 .game-right-panel { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; background: rgba(11,13,18,0.9); border-left: 1px solid rgba(255,255,255,0.06); }
@@ -165,6 +167,11 @@
 .action-btn:hover { border-color: var(--gold-dim); color: var(--text); background: rgba(255,255,255,0.06); }
 .action-btn--active { border-color: var(--cta); color: var(--cta); background: rgba(58,204,96,0.08); }
 .action-btn--disabled { opacity: 0.35; pointer-events: none; border-color: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.3) !important; background: transparent !important; }
+
+/* No actions left popup */
+.no-actions-popup { position: absolute; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); pointer-events: auto; }
+.no-actions-card { background: linear-gradient(145deg, #2a2520, #1a1610); border: 2px solid var(--gold, #c9a24e); border-radius: 16px; padding: 24px 36px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+.no-actions-text { color: #ccc; font-size: 1rem; margin-bottom: 16px; font-family: 'Cinzel', serif; }
 .action-btn--end { border-color: var(--orange, #ff8c42); color: var(--orange); }
 .action-btn--end:hover { background: rgba(255,140,66,0.1); }
 .action-icon { font-size: 1.1rem; }
