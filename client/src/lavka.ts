@@ -40,7 +40,7 @@ async function render() {
           <a href="/" class="lavka-logo">Taloria</a>
           <nav class="lavka-nav-links">
             <a href="/about" class="lavka-nav-item">ГЛАВНАЯ</a>
-            <a href="/dashboard" class="lavka-nav-item">ПЕРСОНАЖИ</a>
+            <a href="/dashboard" class="lavka-nav-item">ПРОФИЛЬ</a>
             <a href="/inventory" class="lavka-nav-item">ИНВЕНТАРЬ</a>
             <a href="/city" class="lavka-nav-item">ГОРОД</a>
             <a href="/lavka.html" class="lavka-nav-item lavka-nav-item--active">ЛАВКА</a>

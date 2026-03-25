@@ -46,7 +46,7 @@ async function render() {
           <a href="/" class="best-logo">Taloria</a>
           <nav class="best-nav-links">
             <a href="/about" class="best-nav-item">ГЛАВНАЯ</a>
-            <a href="/dashboard" class="best-nav-item">ПЕРСОНАЖИ</a>
+            <a href="/dashboard" class="best-nav-item">ПРОФИЛЬ</a>
             <a href="/inventory" class="best-nav-item">ИНВЕНТАРЬ</a>
             <a href="/city" class="best-nav-item">ГОРОД</a>
             <a href="/lavka.html" class="best-nav-item">ЛАВКА</a>
