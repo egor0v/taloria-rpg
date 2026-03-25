@@ -179,7 +179,7 @@ export function renderAbout(container: HTMLElement): void {
   .lp-logo { width: 110px; height: 110px; object-fit: contain; filter: drop-shadow(0 4px 24px rgba(201,162,78,0.35)); margin-bottom: 12px; }
   .lp-brand { font-family: var(--font-heading, 'Cinzel', serif); font-size: 4.2rem; font-weight: 900; color: var(--gold, #f6c86d); letter-spacing: 0.18em; margin: 0; text-shadow: 0 2px 30px rgba(201,162,78,0.4), 0 4px 60px rgba(0,0,0,0.5); }
   .lp-title-logo { max-width: 75vw; width: 900px; height: auto; margin: -40px auto 0; display: block; filter: drop-shadow(0 4px 30px rgba(201,162,78,0.3)); }
-  .lp-hero .lp-sub { margin-top: -10px; }
+  .lp-hero .lp-sub { margin-top: -30px; }
   .lp-divider { text-align: center; margin: 14px 0; display: flex; align-items: center; justify-content: center; gap: 16px; }
   .lp-divider::before, .lp-divider::after { content: ''; flex: 1; max-width: 200px; height: 1px; background: linear-gradient(90deg, transparent, rgba(201,162,78,0.3), transparent); }
   .lp-rune { color: var(--gold); font-size: 0.7rem; }
@@ -206,8 +206,8 @@ export function renderAbout(container: HTMLElement): void {
   .lp-worlds-text { position: relative; z-index: 1; }
   .lp-gameplay-img-wrap { position: absolute; inset: -30px; }
   .lp-gameplay-img-wrap::after {
-    content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
-    background: radial-gradient(ellipse at 60% 50%, transparent 15%, rgba(11,15,21,0.3) 30%, rgba(11,15,21,0.7) 55%, rgba(11,15,21,0.95) 75%, rgba(11,15,21,1) 100%);
+    content: ''; position: absolute; inset: -10px; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at 60% 50%, transparent 10%, rgba(11,15,21,0.25) 25%, rgba(11,15,21,0.6) 45%, rgba(11,15,21,0.88) 65%, rgba(11,15,21,1) 80%);
   }
   .lp-gameplay-img { width: 100%; height: 100%; object-fit: cover; object-position: center; filter: saturate(1.15) contrast(1.05); }
 
