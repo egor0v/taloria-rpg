@@ -7,19 +7,56 @@ const {
   getDamageReduction, getVulnerability, getMoveBonus,
   absorbShieldDamage, applyDamage, getActiveEffects,
 } = require('./StatusEffects');
+const LootGenerator = require('./LootGenerator');
 
 // ============================================================
-// CONSTANTS (ported from app.js)
+// CONSTANTS
 // ============================================================
 
-const BASE_MOVE_RANGE = 2;
+// Movement
+const BASE_MOVE_RANGE = 4;
 const OFFROAD_MOVE_RANGE = 1;
 const OFFROAD_COST = 1;
+const OBSTACLE_STEP_COST = 2;
+
+// Combat
 const SURPRISE_INITIATIVE_BONUS = 10;
 const SURPRISE_DAMAGE_BONUS = 5;
 const SURPRISE_CRIT_BONUS = 0.20;
+const CRIT_DAMAGE_MULTIPLIER = 2;
 const COMBAT_ZONE_RANGE = 4;
 const ENCOUNTER_RANGE = 3;
+const NPC_INTERACT_RANGE = 4;
+
+// Fog of war
+const FOG_HIDDEN = 0;
+const FOG_EXPLORED = 1;
+const FOG_VISIBLE = 2;
+const FULL_VISION_RADIUS = 5;
+const PARTIAL_VISION_RADIUS = 4;
+
+// Search / scouting
+const SEARCH_RADIUS = 5;
+const SEARCH_SUCCESS_DC = 10;
+
+// Hazardous terrain
+const BURNING_DAMAGE = 2;
+const BURNING_DURATION = 3;
+const DROWNING_DC = 10;
+
+// Traps
+const TRAP_DISARM_DC = 12;
+
+// Rewards defaults
+const DEFAULT_XP_REWARD = 20;
+const DEFAULT_GOLD_MIN = 5;
+const DEFAULT_GOLD_MAX = 15;
+const ELITE_HP_THRESHOLD = 40;
+
+// NPC defaults
+const DEFAULT_NPC_HP = 50;
+const DEFAULT_TRADER_HP = 10;
+const DEFAULT_QUEST_NPC_HP = 30;
 
 // Monster abilities lookup (subset for server-side AI)
 const MONSTER_ABILITIES = {
@@ -29,6 +66,9 @@ const MONSTER_ABILITIES = {
   shieldBlock: { damageReduction: 4, cooldown: 2 },
   quickStrike: { critThreshold: 17 },
 };
+
+// Pathfinding key helper (assumes grid < 1000 cols)
+const pathKey = (r, c) => r * 1000 + c;
 
 // ============================================================
 // GAME ENGINE CLASS
@@ -488,7 +528,7 @@ class GameEngine {
     // Damage = weaponRoll + attackBonus - targetArmor (min 1)
     const targetArmor = this.getEntityArmor(target);
     const baseDmg = Math.max(1, dmgRoll + attackBonus - targetArmor);
-    const finalDmg = isCrit ? baseDmg * 2 : baseDmg;
+    const finalDmg = isCrit ? baseDmg * CRIT_DAMAGE_MULTIPLIER : baseDmg;
 
     // Apply damage with shields/reduction
     const dmgResult = applyDamage(target, finalDmg);
@@ -797,8 +837,7 @@ class GameEngine {
     const wisdomBonus = hero.wisdom || 0;
     const total = roll + wisdomBonus;
 
-    // Search always covers 5 cells radius; roll determines discovery quality
-    const radius = 5;
+    const radius = SEARCH_RADIUS;
 
     // Discover hidden objects and monsters in radius
     const discovered = [];
@@ -877,7 +916,7 @@ class GameEngine {
     const obj = this.gs.objects.find(o => o.row === action.targetRow && o.col === action.targetCol && !o.opened && !o.triggered && !o.activated);
     if (!obj) return { type: 'interact', success: false, message: 'Объект не найден' };
 
-    const LootGenerator = require('./LootGenerator');
+    // LootGenerator required at top of file
     const result = { type: 'interact', heroId: hero.id, heroName: hero.name, objectType: obj.type, objectId: obj.id };
 
     switch (obj.type) {
@@ -914,7 +953,7 @@ class GameEngine {
         obj.discovered = true;
         // Disarm check: d20 + agility vs DC 12
         const roll = this.rollDice(20);
-        const dc = 12;
+        const dc = TRAP_DISARM_DC;
         const bonus = hero.agility || 0;
         const total = roll + bonus;
         const success = total >= dc;
@@ -1447,7 +1486,7 @@ class GameEngine {
     // Distribute rewards on victory
     const rewards = { xp: 0, silver: 0, gold: 0, items: [] };
     if (result === 'victory') {
-      const LootGenerator = require('./LootGenerator');
+      // LootGenerator required at top of file
       const aliveHeroes = this.gs.heroes.filter(h => h.hp > 0 && h.alive !== false);
       const killedMonsters = this.gs.monsters.filter(m => m.hp <= 0 && !m.friendly);
 
@@ -1455,8 +1494,8 @@ class GameEngine {
       let totalXp = 0;
       let totalSilver = 0;
       killedMonsters.forEach(m => {
-        totalXp += m.xpReward || 20;
-        totalSilver += (m.goldMin || 5) + Math.floor(Math.random() * ((m.goldMax || 15) - (m.goldMin || 5)));
+        totalXp += m.xpReward || DEFAULT_XP_REWARD;
+        totalSilver += (m.goldMin || DEFAULT_GOLD_MIN) + Math.floor(Math.random() * ((m.goldMax || DEFAULT_GOLD_MAX) - (m.goldMin || DEFAULT_GOLD_MIN)));
       });
 
       // Distribute evenly among alive heroes
@@ -1469,7 +1508,7 @@ class GameEngine {
 
       // Generate monster loot
       killedMonsters.forEach(m => {
-        const lootTier = m.isBoss ? 'boss' : (m.hp >= 40 ? 'elite' : 'common');
+        const lootTier = m.isBoss ? 'boss' : (m.hp >= ELITE_HP_THRESHOLD ? 'elite' : 'common');
         const loot = LootGenerator.generateMonsterLoot ? LootGenerator.generateMonsterLoot(lootTier) : null;
         if (loot?.items?.length && aliveHeroes.length > 0) {
           const recipient = aliveHeroes[Math.floor(Math.random() * aliveHeroes.length)];
@@ -1935,16 +1974,14 @@ class GameEngine {
 
   _updateFogForHero(hero) {
     if (!this.gs.fog || !hero) return;
-    const FULL_VISION = 5;    // fully visible radius
-    const PARTIAL_VISION = 4; // additional semi-transparent radius
-    const totalRadius = FULL_VISION + PARTIAL_VISION; // 9
+    const totalRadius = FULL_VISION_RADIUS + PARTIAL_VISION_RADIUS;
     const ROWS = this.gs.map.length;
     const COLS = this.gs.map[0]?.length || 0;
 
-    // Downgrade previous fully-visible (2) to explored (1) — but never back to hidden (0)
+    // Downgrade previous visible to explored — never back to hidden
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        if (this.gs.fog[r][c] === 2) this.gs.fog[r][c] = 1;
+        if (this.gs.fog[r][c] === FOG_VISIBLE) this.gs.fog[r][c] = FOG_EXPLORED;
       }
     }
 
@@ -1955,13 +1992,13 @@ class GameEngine {
         for (let c = h.col - totalRadius; c <= h.col + totalRadius; c++) {
           if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
           const dist = Math.abs(r - h.row) + Math.abs(c - h.col);
-          if (dist <= FULL_VISION) {
-            this.gs.fog[r][c] = 2; // fully visible
+          if (dist <= FULL_VISION_RADIUS) {
+            this.gs.fog[r][c] = FOG_VISIBLE;
             this.gs.monsters.forEach(m => {
               if (m.row === r && m.col === c && m.alive) m.discovered = true;
             });
-          } else if (dist <= totalRadius && this.gs.fog[r][c] < 1) {
-            this.gs.fog[r][c] = 1; // semi-transparent (explored)
+          } else if (dist <= totalRadius && this.gs.fog[r][c] < FOG_EXPLORED) {
+            this.gs.fog[r][c] = FOG_EXPLORED;
           }
         }
       }
@@ -1981,7 +2018,7 @@ class GameEngine {
     if (cellVal === 4 || cellVal === 'fire') {
       const hasBurning = (entity.statusEffects || []).find(e => e.type === 'burning');
       if (!hasBurning) {
-        applyStatus(entity, 'burning', { damagePerTurn: 2, duration: 3 });
+        applyStatus(entity, 'burning', { damagePerTurn: BURNING_DAMAGE, duration: BURNING_DURATION });
         this.addLog(`${entity.name} попадает в огненную зону! 🔥 Горение на 3 хода (2 HP/ход)`, 'log-damage');
         events.push({ type: 'fire', entityId: entity.id, entityName: entity.name });
       }
@@ -2190,7 +2227,7 @@ GameEngine.initializeFromDB = async function (session) {
     gs.terrain[r] = [];
     for (let c = 0; c < COLS; c++) {
       const t = mapData[r][c];
-      gs.fog[r][c] = FOG_UNKNOWN;
+      gs.fog[r][c] = FOG_HIDDEN;
 
       // Map cell type from admin:
       // 0 = floor (fully walkable)
@@ -2609,22 +2646,20 @@ function _spawnBonusContent(gs, ROWS, COLS) {
 
 // ── Helper: compute initial fog of war ──
 function _computeInitialFog(gs, ROWS, COLS) {
-  const FULL_VISION = 5;
-  const PARTIAL_VISION = 4;
-  const totalRadius = FULL_VISION + PARTIAL_VISION;
+  const totalRadius = FULL_VISION_RADIUS + PARTIAL_VISION_RADIUS;
 
   for (const hero of gs.heroes) {
     for (let r = hero.row - totalRadius; r <= hero.row + totalRadius; r++) {
       for (let c = hero.col - totalRadius; c <= hero.col + totalRadius; c++) {
         if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
         const dist = Math.abs(r - hero.row) + Math.abs(c - hero.col);
-        if (dist <= FULL_VISION) {
-          gs.fog[r][c] = 2; // fully visible
+        if (dist <= FULL_VISION_RADIUS) {
+          gs.fog[r][c] = FOG_VISIBLE;
           gs.monsters.forEach(m => {
             if (m.row === r && m.col === c) m.discovered = true;
           });
         } else if (dist <= totalRadius) {
-          gs.fog[r][c] = 1; // semi-transparent
+          gs.fog[r][c] = FOG_EXPLORED;
         }
       }
     }

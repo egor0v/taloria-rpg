@@ -9,15 +9,40 @@ import { navigateTo } from '../../core/router';
 import { apiCall } from '../../core/api';
 import './GameScreen.css';
 
+// ─── CONSTANTS ───
+const CELL_SIZE_PX = 40;
+const SEARCH_RANGE = 5;
+const NPC_INTERACT_RANGE = 4;
+const MAX_ZOOM = 2.5;
+const MIN_ZOOM_FLOOR = 0.15;
+const ZOOM_STEP_BTN = 0.15;
+const ZOOM_STEP_WHEEL = 0.1;
+const DICE_SHAKE_ITERATIONS = 15;
+const DICE_ANIMATION_INTERVAL_MS = 80;
+const DICE_RESULT_TIMEOUT_MS = 2500;
+const POPUP_OFFSET_X = 12;
+const POPUP_OFFSET_Y = -20;
+
+const DICE_IMAGES: Record<string, string> = {
+  d4: '/img/кубики/d4.png', d6: '/img/кубики/d6.png',
+  d8: '/img/кубики/d8.png', d20: '/img/кубики/d20.png',
+};
+const OBJ_IMAGES: Record<string, string> = { chest: '/img/игровые предметы/chest.png' };
+const OBJ_ICONS: Record<string, string> = { chest: '📦', trap: '⚡', rune: '🔮', questNpc: '❗' };
+const RARITY_COLORS: Record<string, string> = { common: '#e8e6e0', uncommon: '#3acc60', rare: '#4d9fff', epic: '#c77dba', legendary: '#f6c86d' };
+
 // ─── STATE ───
-let gs: any = null;     // current gameState
-let session: any = null; // current session
-let sock: any = null;    // game socket
-let user: any = null;    // current user
+let gs: any = null;
+let session: any = null;
+let sock: any = null;
+let user: any = null;
 let zoom = 1;
-let actionMode = 'move'; // move | attack | ability
+let actionMode = 'move';
 let aiEnabled = true;
 let soundEnabled = true;
+
+// NPC data store (avoids inline JSON.stringify in HTML)
+const npcDataStore = new Map<string, any>();
 
 export function renderGameScreen(container: HTMLElement): void {
   clearElement(container);
@@ -304,7 +329,7 @@ function renderMap() {
   const mapWidth = gs.mapWidth || (map[0]?.length || 1);
   const myHero = getMyHero();
 
-  const cellSizePx = 40;
+  const cellSizePx = CELL_SIZE_PX;
   const gridW = mapWidth * cellSizePx;
   const gridH = mapHeight * cellSizePx;
   let gridStyle = `grid-template-columns:repeat(${mapWidth},${cellSizePx}px);width:${gridW}px;height:${gridH}px;position:relative;`;
@@ -370,7 +395,7 @@ function renderMap() {
       // Search highlight: vision range area
       if (myHero && actionMode === 'search' && !isWall) {
         const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
-        if (dist <= 5) cls += ' cell-searchable';
+        if (dist <= SEARCH_RANGE) cls += ' cell-searchable';
       }
 
       let content = '';
@@ -382,19 +407,20 @@ function renderMap() {
           <span class="token-hp-bar" style="width:${Math.round(hero.hp / hero.maxHp * 100)}%"></span>
         </div>`;
       } else if (showMonster) {
-        content = `<div class="token token-monster" data-npc-id="${monster.id}" data-npc='${JSON.stringify({id:monster.id,name:monster.name,hp:monster.hp,maxHp:monster.maxHp,type:monster.type,canTalk:monster.canTalk,friendly:false,label:monster.label||'👹',tokenImg:monster.tokenImg})}' title="${monster.name}">
+        npcDataStore.set(monster.id, { id: monster.id, name: monster.name, hp: monster.hp, maxHp: monster.maxHp, type: monster.type, canTalk: monster.canTalk, friendly: false, label: monster.label || '👹', tokenImg: monster.tokenImg });
+        content = `<div class="token token-monster" data-npc-id="${monster.id}" title="${monster.name}">
           ${monster.tokenImg ? `<img src="${monster.tokenImg}" class="token-img" alt="" />` : '👹'}
           <span class="token-hp-bar token-hp-monster" style="width:${Math.round(monster.hp / monster.maxHp * 100)}%"></span>
         </div>`;
       } else if (friendlyNpc) {
-        content = `<span class="token-object token-npc" data-npc-id="${friendlyNpc.id}" data-npc='${JSON.stringify({id:friendlyNpc.id,name:friendlyNpc.name,hp:friendlyNpc.hp,maxHp:friendlyNpc.maxHp,type:friendlyNpc.type,canTalk:friendlyNpc.canTalk,friendly:true,label:friendlyNpc.label||'🧝',isTrader:friendlyNpc.isTrader,isQuestNpc:friendlyNpc.isQuestNpc})}' title="${friendlyNpc.name}">${friendlyNpc.label || '🧝'}</span>`;
+        npcDataStore.set(friendlyNpc.id, { id: friendlyNpc.id, name: friendlyNpc.name, hp: friendlyNpc.hp, maxHp: friendlyNpc.maxHp, type: friendlyNpc.type, canTalk: friendlyNpc.canTalk, friendly: true, label: friendlyNpc.label || '🧝', isTrader: friendlyNpc.isTrader, isQuestNpc: friendlyNpc.isQuestNpc });
+        content = `<span class="token-object token-npc" data-npc-id="${friendlyNpc.id}" title="${friendlyNpc.name}">${friendlyNpc.label || '🧝'}</span>`;
       } else if (obj && fogV > 0) {
-        const objImgs: Record<string, string> = { chest: '/img/игровые предметы/chest.png' };
-        const objIcons: Record<string, string> = { chest: '📦', trap: '⚡', rune: '🔮', questNpc: '❗' };
-        const imgSrc = objImgs[obj.type];
+        const imgSrc = OBJ_IMAGES[obj.type];
+        const icon = OBJ_ICONS[obj.type] || '❓';
         content = imgSrc
-          ? `<span class="token-object" title="${obj.name || obj.type}"><img src="${imgSrc}" alt="" onerror="this.parentElement.textContent='${objIcons[obj.type]||'❓'}'" /></span>`
-          : `<span class="token-object" title="${obj.name || obj.type}">${objIcons[obj.type] || '❓'}</span>`;
+          ? `<span class="token-object" title="${obj.name || obj.type}"><img src="${imgSrc}" alt="" onerror="this.parentElement.textContent='${icon}'" /></span>`
+          : `<span class="token-object" title="${obj.name || obj.type}">${icon}</span>`;
       }
 
       html += `<div class="${cls}" data-x="${x}" data-y="${y}">${content}</div>`;
@@ -415,13 +441,14 @@ function renderMap() {
   // NPC hover popups
   mapEl.querySelectorAll('[data-npc-id]').forEach(el => {
     el.addEventListener('mouseenter', (e) => {
-      const npcData = JSON.parse((el as HTMLElement).dataset.npc || '{}');
+      const npcId = (el as HTMLElement).dataset.npcId || '';
+      const npcData = npcDataStore.get(npcId) || {};
       const myH = getMyHero();
       const parent = (el as HTMLElement).closest('.map-cell') as HTMLElement;
       const npcX = parseInt(parent?.dataset.x || '0');
       const npcY = parseInt(parent?.dataset.y || '0');
       const dist = myH ? Math.abs(myH.col - npcX) + Math.abs(myH.row - npcY) : 99;
-      const inRange = dist <= 4;
+      const inRange = dist <= NPC_INTERACT_RANGE;
       showNpcHover(npcData, e as MouseEvent, inRange);
     });
     el.addEventListener('mouseleave', () => {
@@ -574,7 +601,6 @@ function showItemPopup() {
 const STAT_LABELS: Record<string, string> = { attack: 'СИЛ', agility: 'ЛОВ', armor: 'ВЫН', intellect: 'ИНТ', wisdom: 'МУД', charisma: 'ХАР' };
 const EQUIP_SLOT_NAMES: Record<string, string> = { weapon: 'ОРУЖИЕ', shield: 'ЩИТ', helmet: 'ШЛЕМ', cloak: 'ПЛАЩ', armor: 'БРОНЯ', pants: 'ШТАНЫ', boots: 'ОБУВЬ', gloves: 'ПРЕДМЕТ', ring: 'КОЛЬЦО', amulet: 'АМУЛЕТ' };
 const RARITY_NAMES: Record<string, string> = { common: 'Обычный', uncommon: 'Необычный', rare: 'Редкий', epic: 'Эпический', legendary: 'Легендарный' };
-const RARITY_COLORS: Record<string, string> = { common: '#9a9a9e', uncommon: '#3acc60', rare: '#5b8fff', epic: '#a855f7', legendary: '#f6c86d' };
 
 function itemEmoji(type: string): string {
   const m: Record<string, string> = { weapon: '⚔️', armor: 'armor' ? '🛡️' : '🛡️', helmet: '⛑️', boots: '👢', shield: '🛡️', ring: '💍', amulet: '📿', potion: '🧪', scroll: '📜', food: '🍖', tool: '🔧', junk: '🗑️', quest: '❗' };
@@ -850,19 +876,19 @@ function getMinZoom(): number {
   const cW = container.clientWidth || 600;
   const cH = container.clientHeight || 400;
   // Min zoom: map fills at least the container
-  return Math.max(0.15, Math.min(cW / mapW, cH / mapH));
+  return Math.max(MIN_ZOOM_FLOOR, Math.min(cW / mapW, cH / mapH));
 }
 
 function setupZoom() {
-  document.getElementById('btn-zoom-in')?.addEventListener('click', () => { zoom = Math.min(2.5, zoom + 0.15); applyZoom(); });
-  document.getElementById('btn-zoom-out')?.addEventListener('click', () => { const min = getMinZoom(); zoom = Math.max(min, zoom - 0.15); applyZoom(); });
+  document.getElementById('btn-zoom-in')?.addEventListener('click', () => { zoom = Math.min(MAX_ZOOM, zoom + ZOOM_STEP_BTN); applyZoom(); });
+  document.getElementById('btn-zoom-out')?.addEventListener('click', () => { const min = getMinZoom(); zoom = Math.max(min, zoom - ZOOM_STEP_BTN); applyZoom(); });
   // Mouse wheel zoom
   document.querySelector('.game-map-scroll')?.addEventListener('wheel', (e: Event) => {
     const we = e as WheelEvent;
     if (we.ctrlKey || we.metaKey) {
       we.preventDefault();
       const min = getMinZoom();
-      zoom = we.deltaY < 0 ? Math.min(2.5, zoom + 0.1) : Math.max(min, zoom - 0.1);
+      zoom = we.deltaY < 0 ? Math.min(MAX_ZOOM, zoom + ZOOM_STEP_WHEEL) : Math.max(min, zoom - ZOOM_STEP_WHEEL);
       applyZoom();
     }
   }, { passive: false });
@@ -905,12 +931,12 @@ function showNpcHover(npc: any, e: MouseEvent, inRange: boolean) {
     ${inRange ? `<div class="npc-hover-actions">
       ${npc.canTalk || isFriendly ? `<button class="npc-hover-btn npc-hover-talk" data-npc-id="${npc.id}">💬 Поговорить</button>` : ''}
       <button class="npc-hover-btn npc-hover-attack" data-npc-id="${npc.id}">⚔ Атаковать</button>
-    </div>` : `<div class="npc-hover-dist">Слишком далеко (нужно ≤ 4 клетки)</div>`}
+    </div>` : `<div class="npc-hover-dist">Слишком далеко (нужно ≤ ${NPC_INTERACT_RANGE} клеток)</div>`}
   `;
 
   // Position near mouse
-  popup.style.left = (e.clientX + 12) + 'px';
-  popup.style.top = (e.clientY - 20) + 'px';
+  popup.style.left = (e.clientX + POPUP_OFFSET_X) + 'px';
+  popup.style.top = (e.clientY + POPUP_OFFSET_Y) + 'px';
   document.body.appendChild(popup);
 
   // Keep popup alive on hover
@@ -948,11 +974,7 @@ function showDiceResultPopup(roll: any, onDone: () => void) {
   const finalRoll = roll.roll || 1;
   const success = roll.success !== undefined ? roll.success : true;
 
-  const diceImgMap: Record<string, string> = {
-    d4: '/img/кубики/d4.png', d6: '/img/кубики/d6.png',
-    d8: '/img/кубики/d8.png', d20: '/img/кубики/d20.png',
-  };
-  const diceImg = diceImgMap[diceType] || diceImgMap['d20'];
+  const diceImg = DICE_IMAGES[diceType] || DICE_IMAGES['d20'];
 
   const overlay = document.createElement('div');
   overlay.className = 'dice-popup-overlay';
@@ -984,7 +1006,7 @@ function showDiceResultPopup(roll: any, onDone: () => void) {
     const interval = setInterval(() => {
       valueEl.textContent = String(Math.floor(Math.random() * maxVal) + 1);
       count++;
-      if (count > 15) {
+      if (count > DICE_SHAKE_ITERATIONS) {
         clearInterval(interval);
         diceEl.classList.remove('dice-shaking');
         valueEl.textContent = String(finalRoll);
@@ -994,9 +1016,9 @@ function showDiceResultPopup(roll: any, onDone: () => void) {
         resultEl.innerHTML = roll.resultText || (success
           ? `<span class="dice-result-success">✅ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Успех!</span>`
           : `<span class="dice-result-fail">❌ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Провал!</span>`);
-        setTimeout(() => { overlay.remove(); onDone(); }, 2500);
+        setTimeout(() => { overlay.remove(); onDone(); }, DICE_RESULT_TIMEOUT_MS);
       }
-    }, 80);
+    }, DICE_ANIMATION_INTERVAL_MS);
   });
 }
 
@@ -1076,9 +1098,9 @@ function showDiceCheckPopup(evt: any) {
         });
 
         // Auto-close after 2s
-        setTimeout(() => overlay.remove(), 2500);
+        setTimeout(() => overlay.remove(), DICE_RESULT_TIMEOUT_MS);
       }
-    }, 80);
+    }, DICE_ANIMATION_INTERVAL_MS);
   });
 }
 
