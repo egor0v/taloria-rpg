@@ -740,9 +740,32 @@ function setupTabs() {
   });
 }
 
+function getMinZoom(): number {
+  const container = document.querySelector('.game-map-scroll');
+  const mapEl = document.getElementById('game-map');
+  if (!container || !mapEl || !gs?.map) return 0.3;
+  const cellSize = 40; // --cell-size default
+  const mapW = (gs.mapWidth || gs.map[0]?.length || 1) * cellSize;
+  const mapH = (gs.mapHeight || gs.map.length || 1) * cellSize;
+  const cW = container.clientWidth || 600;
+  const cH = container.clientHeight || 400;
+  // Min zoom: map fills at least the container
+  return Math.max(0.15, Math.min(cW / mapW, cH / mapH));
+}
+
 function setupZoom() {
   document.getElementById('btn-zoom-in')?.addEventListener('click', () => { zoom = Math.min(2.5, zoom + 0.15); applyZoom(); });
-  document.getElementById('btn-zoom-out')?.addEventListener('click', () => { zoom = Math.max(0.3, zoom - 0.15); applyZoom(); });
+  document.getElementById('btn-zoom-out')?.addEventListener('click', () => { const min = getMinZoom(); zoom = Math.max(min, zoom - 0.15); applyZoom(); });
+  // Mouse wheel zoom
+  document.querySelector('.game-map-scroll')?.addEventListener('wheel', (e: Event) => {
+    const we = e as WheelEvent;
+    if (we.ctrlKey || we.metaKey) {
+      we.preventDefault();
+      const min = getMinZoom();
+      zoom = we.deltaY < 0 ? Math.min(2.5, zoom + 0.1) : Math.max(min, zoom - 0.1);
+      applyZoom();
+    }
+  }, { passive: false });
 }
 
 function applyZoom() {
