@@ -791,6 +791,15 @@ function showDiceCheckPopup(evt: any) {
   const dc = evt.dc || 10;
   const maxVal = parseInt(diceType.replace('d', '')) || 20;
 
+  // Dice images from /img/кубики/
+  const diceImgMap: Record<string, string> = {
+    d4: '/img/кубики/d4.png',
+    d6: '/img/кубики/d6.png',
+    d8: '/img/кубики/d8.png',
+    d20: '/img/кубики/d20.png',
+  };
+  const diceImg = diceImgMap[diceType] || diceImgMap['d20'];
+
   const overlay = document.createElement('div');
   overlay.className = 'dice-popup-overlay';
   overlay.innerHTML = `
@@ -798,7 +807,10 @@ function showDiceCheckPopup(evt: any) {
       <div class="dice-popup-title">⚠️ Проверка!</div>
       <p class="dice-popup-message">${evt.message || 'Бросьте кубик'}</p>
       <div class="dice-popup-dice-wrap">
-        <div class="dice-popup-dice" id="dice-anim">${diceType.toUpperCase()}</div>
+        <div class="dice-popup-dice" id="dice-anim">
+          <img src="${diceImg}" alt="${diceType}" class="dice-img" />
+        </div>
+        <div class="dice-popup-value" id="dice-value">${diceType.toUpperCase()}</div>
       </div>
       <p class="dice-popup-dc">Нужно: ${diceType} ≥ ${dc}</p>
       <div class="dice-popup-result" id="dice-result" style="display:none"></div>
@@ -808,6 +820,7 @@ function showDiceCheckPopup(evt: any) {
   document.body.appendChild(overlay);
 
   const diceEl = document.getElementById('dice-anim')!;
+  const valueEl = document.getElementById('dice-value')!;
   const resultEl = document.getElementById('dice-result')!;
   const btn = document.getElementById('btn-roll-dice')!;
 
@@ -817,14 +830,15 @@ function showDiceCheckPopup(evt: any) {
     diceEl.classList.add('dice-shaking');
     let shakeCount = 0;
     const shakeInterval = setInterval(() => {
-      diceEl.textContent = String(Math.floor(Math.random() * maxVal) + 1);
+      valueEl.textContent = String(Math.floor(Math.random() * maxVal) + 1);
       shakeCount++;
       if (shakeCount > 15) {
         clearInterval(shakeInterval);
         // Final roll
         const roll = Math.floor(Math.random() * maxVal) + 1;
         diceEl.classList.remove('dice-shaking');
-        diceEl.textContent = String(roll);
+        valueEl.textContent = String(roll);
+        valueEl.classList.add(roll >= dc ? 'dice-value-success' : 'dice-value-fail');
         diceEl.classList.add(roll >= dc ? 'dice-success' : 'dice-fail');
 
         const success = roll >= dc;

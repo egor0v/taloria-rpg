@@ -350,8 +350,12 @@
 .dice-popup { background: linear-gradient(145deg, #2a2520, #1a1610); border: 2px solid var(--gold, #c9a24e); border-radius: 16px; padding: 32px 40px; text-align: center; min-width: 320px; box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 30px rgba(201,162,78,0.15); }
 .dice-popup-title { font-family: 'Cinzel', serif; font-size: 1.5rem; color: var(--gold, #c9a24e); margin-bottom: 8px; }
 .dice-popup-message { color: #ccc; font-size: 0.95rem; margin-bottom: 20px; }
-.dice-popup-dice-wrap { display: flex; justify-content: center; margin: 16px 0; }
-.dice-popup-dice { width: 80px; height: 80px; background: linear-gradient(145deg, #3a3228, #2a2520); border: 2px solid rgba(201,162,78,0.4); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-family: 'Cinzel', serif; font-size: 1.8rem; font-weight: 700; color: #fff; transition: transform 0.1s; }
+.dice-popup-dice-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 16px 0; }
+.dice-popup-dice { width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; transition: transform 0.1s; position: relative; }
+.dice-img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5)); }
+.dice-popup-value { font-family: 'Cinzel', serif; font-size: 2.2rem; font-weight: 900; color: var(--gold, #c9a24e); text-shadow: 0 2px 8px rgba(0,0,0,0.6); transition: color 0.3s, transform 0.3s; }
+.dice-value-success { color: #3acc60 !important; transform: scale(1.2); }
+.dice-value-fail { color: #ff4d4d !important; transform: scale(1.2); }
 .dice-shaking { animation: diceShake 0.08s infinite alternate; }
 @keyframes diceShake {
   0% { transform: rotate(-8deg) scale(1.05); }
