@@ -17,6 +17,7 @@ import { renderCityLobby } from './screens/city/CityLobby';
 import { renderLobby } from './screens/lobby/LobbyScreen';
 import { renderScenario } from './screens/scenario/ScenarioScreen';
 import { renderMissionEnd } from './screens/missionEnd/MissionEndScreen';
+import { renderAbout } from './screens/about/AboutScreen';
 
 const container = document.getElementById('screen-container')!;
 const topNav = document.getElementById('top-nav')!;
@@ -110,6 +111,12 @@ router.addRoute('/mission-end', () => {
   renderMissionEnd(container);
 }, requireAuth);
 
+router.addRoute('/about', () => {
+  showNav(true);
+  updateNav();
+  renderAbout(container);
+});
+
 router.addRoute('/join/:code', (params) => {
   // Store invite code and redirect to login or dashboard
   if (params?.code) {
@@ -124,7 +131,7 @@ router.addRoute('/join/:code', (params) => {
 
 // Guard: redirect to login if not authenticated
 router.setBeforeEach((path) => {
-  const publicPaths = ['/', '/join'];
+  const publicPaths = ['/', '/join', '/about'];
   const isPublic = publicPaths.some(p => path === p || path.startsWith('/join/'));
   if (!isPublic && !getCurrentUser()) {
     navigateTo('/', true);
