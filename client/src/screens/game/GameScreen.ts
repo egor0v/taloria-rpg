@@ -232,19 +232,25 @@ function updateHUD() {
   el('move-badge')!.textContent = String(steps);
   el('gold-display')!.textContent = String(myHero?.silver || myHero?.gold || 0);
 
-  // Disable buttons when actions used
-  const moveBtn = el('btn-move');
-  if (moveBtn) {
-    const moveUsed = myHero?.moveUsed || gs.moveUsed || steps <= 0;
-    moveBtn.classList.toggle('action-btn--disabled', moveUsed);
-  }
+  // Disable only the specific action that was used
+  const moveUsed = myHero?.moveUsed || gs.moveUsed || steps <= 0;
   const actionUsed = myHero?.actionUsed || gs.actionUsed;
   const bonusUsed = myHero?.bonusActionUsed || gs.bonusActionUsed;
+
+  el('btn-move')?.classList.toggle('action-btn--disabled', !!moveUsed);
   el('btn-attack')?.classList.toggle('action-btn--disabled', !!actionUsed);
   el('btn-search')?.classList.toggle('action-btn--disabled', !!actionUsed);
   el('btn-ability')?.classList.toggle('action-btn--disabled', !!actionUsed);
   el('btn-item')?.classList.toggle('action-btn--disabled', !!bonusUsed);
   el('btn-interact')?.classList.toggle('action-btn--disabled', !!bonusUsed);
+
+  // Auto-switch from disabled mode to first available
+  if (moveUsed && actionMode === 'move') {
+    if (!actionUsed) { actionMode = 'attack'; el('btn-attack')?.classList.add('action-btn--active'); }
+    else if (!bonusUsed) { actionMode = 'interact'; }
+    document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active'));
+    document.getElementById(`btn-${actionMode}`)?.classList.add('action-btn--active');
+  }
 
   // Turn name
   const turnEl = el('turn-name')!;
