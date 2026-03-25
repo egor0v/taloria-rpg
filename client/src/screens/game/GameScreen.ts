@@ -348,9 +348,9 @@ function renderMap() {
         if (dist <= 1) cls += ' cell-interactable';
       }
       // Search highlight: vision range area
-      if (myHero && actionMode === 'search' && !isWall && fogV >= 0) {
+      if (myHero && actionMode === 'search' && !isWall) {
         const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
-        if (dist <= (myHero.vision || 4)) cls += ' cell-searchable';
+        if (dist <= 5) cls += ' cell-searchable';
       }
 
       let content = '';

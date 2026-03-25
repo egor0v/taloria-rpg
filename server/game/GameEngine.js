@@ -797,12 +797,8 @@ class GameEngine {
     const wisdomBonus = hero.wisdom || 0;
     const total = roll + wisdomBonus;
 
-    // Search radius depends on roll: 10+ = vision, 15+ = vision+2, 20 = vision+4
-    let radius;
-    if (total >= 20) radius = (hero.vision || 4) + 4;
-    else if (total >= 15) radius = (hero.vision || 4) + 2;
-    else if (total >= 10) radius = hero.vision || 4;
-    else radius = Math.max(1, Math.floor((hero.vision || 4) / 2));
+    // Search always covers 5 cells radius; roll determines discovery quality
+    const radius = 5;
 
     // Discover hidden objects and monsters in radius
     const discovered = [];
