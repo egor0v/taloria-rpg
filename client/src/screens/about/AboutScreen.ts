@@ -22,7 +22,6 @@ export function renderAbout(container: HTMLElement): void {
       <div class="lp-hero-img" style="background-image: url('/hero-banner.png')"></div>
       <div class="lp-hero-overlay"></div>
       <div class="lp-hero-inner">
-        <img src="/logo.png" alt="Taloria" class="lp-logo" />
         <h1 class="lp-brand">TALORIA</h1>
         <div class="lp-divider"><span class="lp-rune">◆</span></div>
         <p class="lp-sub">Кооперативная пошаговая RPG с AI-ведущим</p>
