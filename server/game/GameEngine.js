@@ -453,13 +453,11 @@ class GameEngine {
       this.addLog(`${hero.name} атакует ${target.name} — броня выдержала! (🎲${armorRoll} vs ${armorValue})`, 'log-action');
       return {
         type: 'attack',
-        heroId: hero.id,
-        targetId: target.id,
-        armorRoll,
-        armorValue,
-        penetrated: false,
-        isCrit: false,
-        shieldBlocked,
+        heroId: hero.id, heroName: hero.name,
+        targetId: target.id, targetName: target.name,
+        d20: armorRoll, effectiveArmor: armorValue,
+        penetrated: false, isCrit: false, shieldBlocked,
+        diceRolls: [{ diceType: 'd20', roll: armorRoll, label: '⚔ Атака', message: `${hero.name} → ${target.name}`, success: false, resultText: `<span class="dice-result-fail">❌ d20=${armorRoll} ≤ броня ${armorValue} — Заблокировано!</span>` }],
       };
     }
 
@@ -522,21 +520,19 @@ class GameEngine {
 
     return {
       type: 'attack',
-      heroId: hero.id,
-      targetId: target.id,
-      armorRoll,
-      armorValue,
-      penetrated: true,
-      isCrit,
-      dmgRoll,
-      damageDie,
-      attackBonus,
-      baseDmg,
-      finalDmg,
+      heroId: hero.id, heroName: hero.name,
+      targetId: target.id, targetName: target.name,
+      d20: armorRoll, effectiveArmor: armorValue,
+      penetrated: true, isCrit,
+      dmgRoll, damageDie, attackBonus, baseDmg, finalDmg,
       shieldAbsorbed: dmgResult.shieldAbsorbed,
       reduced: dmgResult.reduced,
-      targetHp: target.hp,
+      targetHp: target.hp, targetAlive: target.hp > 0,
       killed,
+      diceRolls: [
+        { diceType: 'd20', roll: armorRoll, label: '⚔ Попадание', message: `${hero.name} → ${target.name}`, success: true, resultText: `<span class="dice-result-success">✅ d20=${armorRoll} > броня ${armorValue}${isCrit ? ' — КРИТ!' : ''}</span>` },
+        { diceType: `d${damageDie}`, roll: dmgRoll, label: '💥 Урон', message: `${finalDmg} урона${killed ? ' — УБИТ!' : ''}`, success: !killed, bonus: attackBonus, resultText: `<span class="${killed ? 'dice-result-fail' : 'dice-result-success'}">${isCrit ? '💥' : '⚔'} d${damageDie}=${dmgRoll}+${attackBonus}-${targetArmor}=${finalDmg} урона${killed ? ' ☠ УБИТ!' : ''}</span>` },
+      ],
     };
   }
 
@@ -840,19 +836,22 @@ class GameEngine {
         const roll = this.rollDice(20);
         const dc = 12;
         const bonus = hero.agility || 0;
-        if (roll + bonus >= dc) {
+        const total = roll + bonus;
+        const success = total >= dc;
+        if (success) {
           result.disarmed = true;
-          result.message = `${hero.name} обезвреживает ловушку! (d20=${roll}+${bonus}=${roll + bonus} ≥ ${dc})`;
-          this.addLog(`🪤 ${result.message}`, 'log-action');
+          result.message = `${hero.name} обезвреживает ловушку!`;
+          this.addLog(`🪤 ${result.message} (d20=${roll}+${bonus}=${total} ≥ ${dc})`, 'log-action');
         } else {
           const dmg = obj.trapType === 'rift' ? 15 : obj.trapType === 'snare' ? 8 : 4;
           hero.hp = Math.max(0, hero.hp - dmg);
           result.disarmed = false;
           result.damage = dmg;
-          result.message = `${hero.name} активирует ловушку! ${dmg} урона (d20=${roll}+${bonus}=${roll + bonus} < ${dc})`;
-          this.addLog(`⚡ ${result.message}`, 'log-damage');
+          result.message = `${hero.name} активирует ловушку! ${dmg} урона`;
+          this.addLog(`⚡ ${result.message} (d20=${roll}+${bonus}=${total} < ${dc})`, 'log-damage');
           if (hero.hp <= 0) { hero.alive = false; this.addLog(`${hero.name} погибает!`, 'log-kill'); }
         }
+        result.diceRolls = [{ diceType: 'd20', roll, bonus, label: '🪤 Ловушка', message: `Обезвреживание: d20+ЛОВ ≥ ${dc}`, success, resultText: success ? `<span class="dice-result-success">✅ d20=${roll}+${bonus}=${total} ≥ ${dc} — Обезврежена!</span>` : `<span class="dice-result-fail">❌ d20=${roll}+${bonus}=${total} < ${dc} — Ловушка сработала!</span>` }];
         break;
       }
       default:

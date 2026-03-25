@@ -48,14 +48,15 @@ export function renderGameScreen(container: HTMLElement): void {
   sock.on('action-result', (data: any) => {
     log(fmtAction(data));
     if (data.gameState) { gs = data.gameState; onUpdate(); }
-    // Check for hazard events requiring dice rolls
-    if (data.result?.events) {
-      for (const evt of data.result.events) {
-        if (evt.type === 'water_check') {
-          showDiceCheckPopup(evt);
-        }
-      }
+    // Show dice roll popups for all checks
+    const rolls = data.result?.diceRolls || [];
+    const events = data.result?.events || [];
+    // Water check — interactive (player rolls)
+    for (const evt of events) {
+      if (evt.type === 'water_check') { showDiceCheckPopup(evt); }
     }
+    // All other dice rolls — animated display of server result
+    if (rolls.length > 0) { showDiceRollSequence(rolls); }
   });
   sock.on('action-error', (data: any) => log(`❌ ${data.error || data.message || 'Ошибка'}`, 'error'));
   sock.on('ai-narration', (data: any) => { setNarration(data.text); log(`📜 ${data.text}`, 'narration'); });
@@ -817,7 +818,75 @@ function getMyHero() {
 }
 
 // ═══════════════════════════════════
-// DICE CHECK POPUP (water, traps, etc.)
+// DICE ROLL SEQUENCE — server-resolved rolls shown as animation
+// ═══════════════════════════════════
+function showDiceRollSequence(rolls: any[]) {
+  let idx = 0;
+  function showNext() {
+    if (idx >= rolls.length) return;
+    const roll = rolls[idx++];
+    showDiceResultPopup(roll, () => showNext());
+  }
+  showNext();
+}
+
+function showDiceResultPopup(roll: any, onDone: () => void) {
+  document.querySelector('.dice-popup-overlay')?.remove();
+
+  const diceType = roll.diceType || 'd20';
+  const maxVal = parseInt(diceType.replace('d', '')) || 20;
+  const finalRoll = roll.roll || 1;
+  const success = roll.success !== undefined ? roll.success : true;
+
+  const diceImgMap: Record<string, string> = {
+    d4: '/img/кубики/d4.png', d6: '/img/кубики/d6.png',
+    d8: '/img/кубики/d8.png', d20: '/img/кубики/d20.png',
+  };
+  const diceImg = diceImgMap[diceType] || diceImgMap['d20'];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'dice-popup-overlay';
+  overlay.innerHTML = `
+    <div class="dice-popup">
+      <div class="dice-popup-title">${roll.label || '🎲 Бросок'}</div>
+      <p class="dice-popup-message">${roll.message || ''}</p>
+      <div class="dice-popup-dice-wrap">
+        <div class="dice-popup-dice dice-shaking" id="dice-anim-auto">
+          <img src="${diceImg}" alt="${diceType}" class="dice-img" />
+        </div>
+        <div class="dice-popup-value" id="dice-value-auto">...</div>
+      </div>
+      <div class="dice-popup-result" id="dice-result-auto" style="display:none"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const diceEl = document.getElementById('dice-anim-auto')!;
+  const valueEl = document.getElementById('dice-value-auto')!;
+  const resultEl = document.getElementById('dice-result-auto')!;
+
+  // Animate random numbers then land on final
+  let count = 0;
+  const interval = setInterval(() => {
+    valueEl.textContent = String(Math.floor(Math.random() * maxVal) + 1);
+    count++;
+    if (count > 12) {
+      clearInterval(interval);
+      diceEl.classList.remove('dice-shaking');
+      valueEl.textContent = String(finalRoll);
+      valueEl.classList.add(success ? 'dice-value-success' : 'dice-value-fail');
+      diceEl.classList.add(success ? 'dice-success' : 'dice-fail');
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = roll.resultText || (success
+        ? `<span class="dice-result-success">✅ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Успех!</span>`
+        : `<span class="dice-result-fail">❌ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Провал!</span>`);
+      setTimeout(() => { overlay.remove(); onDone(); }, 2000);
+    }
+  }, 80);
+}
+
+// ═══════════════════════════════════
+// DICE CHECK POPUP — interactive (player clicks to roll)
 // ═══════════════════════════════════
 function showDiceCheckPopup(evt: any) {
   // Remove any existing popup
