@@ -14,11 +14,11 @@ const LOCATION_POSITIONS: Record<string, { x: number; y: number; icon: string; i
   'alchemist': { x: 78, y: 62, icon: '🧪', img: '/uploads/city/alhimik-lavka.png' },
   'herbalist': { x: 42, y: 75, icon: '🌿', img: '/uploads/city/hijina-travnicy.png' },
   'shop-1':    { x: 48, y: 45, icon: '📚', img: '/uploads/city/books-lavka.png' },
-  'shop-2':    { x: 55, y: 50, icon: '💎', img: '/uploads/city/magik-lavka.png' },
-  'shop-3':    { x: 35, y: 35, icon: '✨' },
-  'shop-4':    { x: 62, y: 42, icon: '🏪' },
-  'main-shop': { x: 52, y: 38, icon: '🏛️' },
-  'gates':     { x: 52, y: 82, icon: '🏰' },
+  'shop-2':    { x: 55, y: 50, icon: '💎', img: '/uploads/city/lavka-yuvelira.png' },
+  'shop-3':    { x: 35, y: 35, icon: '✨', img: '/uploads/city/magik-lavka.png' },
+  'shop-4':    { x: 62, y: 42, icon: '🏪', img: '/uploads/city/lavka-brona.png' },
+  'main-shop': { x: 52, y: 38, icon: '🏛️', img: '/uploads/city/glav-lavka.png' },
+  'gates':     { x: 52, y: 82, icon: '🏰', img: '/uploads/city/vorota.png' },
 };
 
 export async function renderCity(container: HTMLElement): Promise<void> {
