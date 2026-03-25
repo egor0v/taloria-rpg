@@ -159,6 +159,7 @@
 }
 .action-btn:hover { border-color: var(--gold-dim); color: var(--text); background: rgba(255,255,255,0.06); }
 .action-btn--active { border-color: var(--cta); color: var(--cta); background: rgba(58,204,96,0.08); }
+.action-btn--disabled { opacity: 0.35; pointer-events: none; border-color: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.3) !important; background: transparent !important; }
 .action-btn--end { border-color: var(--orange, #ff8c42); color: var(--orange); }
 .action-btn--end:hover { background: rgba(255,140,66,0.1); }
 .action-icon { font-size: 1.1rem; }

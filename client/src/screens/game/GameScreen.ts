@@ -227,8 +227,16 @@ function updateHUD() {
   modeEl.className = gs.mode === 'combat' ? 'mode-combat' : 'mode-explore';
 
   const myHero = getMyHero();
-  el('move-badge')!.textContent = String(myHero?.stepsRemaining || myHero?.moveRange || 0);
+  const steps = myHero?.stepsRemaining ?? myHero?.moveRange ?? 0;
+  el('move-badge')!.textContent = String(steps);
   el('gold-display')!.textContent = String(myHero?.silver || myHero?.gold || 0);
+
+  // Disable move button when movement used
+  const moveBtn = el('btn-move');
+  if (moveBtn) {
+    const moveUsed = myHero?.moveUsed || gs.moveUsed || steps <= 0;
+    moveBtn.classList.toggle('action-btn--disabled', moveUsed);
+  }
 
   // Turn name
   const turnEl = el('turn-name')!;
@@ -263,8 +271,8 @@ function renderMap() {
   const cellSizePx = 40;
   let gridStyle = `grid-template-columns:repeat(${mapWidth},${cellSizePx}px);`;
   if (bgImage) {
-    // 100% 100% ensures bg image aligns exactly with grid cells (no offset)
-    gridStyle += `background-image:url(${bgImage});background-size:100% 100%;background-repeat:no-repeat;`;
+    const cacheBust = bgImage + (bgImage.includes('?') ? '&' : '?') + 'v=' + Date.now();
+    gridStyle += `background-image:url(${cacheBust});background-size:100% 100%;background-repeat:no-repeat;`;
   }
   let html = `<div class="tactical-grid" style="${gridStyle}">`;
 
