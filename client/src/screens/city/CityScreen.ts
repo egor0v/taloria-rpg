@@ -4,15 +4,15 @@ import { clearElement } from '../../utils/safeRender';
 import './CityScreen.css';
 
 // Позиции иконок на карте города (в % от размера карты)
-const LOCATION_POSITIONS: Record<string, { x: number; y: number; icon: string }> = {
-  'tavern-1':  { x: 28, y: 42, icon: '🍺' },
-  'tavern-2':  { x: 15, y: 25, icon: '🍺' },
-  'tavern-3':  { x: 72, y: 28, icon: '🍺' },
-  'tavern-4':  { x: 85, y: 55, icon: '🍺' },
-  'smithy':    { x: 20, y: 58, icon: '⚒️' },
+const LOCATION_POSITIONS: Record<string, { x: number; y: number; icon: string; img?: string }> = {
+  'tavern-1':  { x: 28, y: 42, icon: '🍺', img: '/uploads/city/zolotoy-kubik.png' },
+  'tavern-2':  { x: 15, y: 25, icon: '🍺', img: '/uploads/city/veseliy-goblin.png' },
+  'tavern-3':  { x: 72, y: 28, icon: '🍺', img: '/uploads/city/elf-dub.png' },
+  'tavern-4':  { x: 85, y: 55, icon: '🍺', img: '/uploads/city/temniy-podval.png' },
+  'smithy':    { x: 20, y: 58, icon: '⚒️', img: '/uploads/city/kuznica.png' },
   'temple':    { x: 58, y: 22, icon: '⛪' },
   'alchemist': { x: 78, y: 62, icon: '🧪' },
-  'herbalist': { x: 42, y: 75, icon: '🌿' },
+  'herbalist': { x: 42, y: 75, icon: '🌿', img: '/uploads/city/hijina-travnicy.png' },
   'shop-1':    { x: 48, y: 45, icon: '📚' },
   'shop-2':    { x: 55, y: 50, icon: '💎' },
   'shop-3':    { x: 35, y: 35, icon: '✨' },
@@ -47,7 +47,7 @@ export async function renderCity(container: HTMLElement): Promise<void> {
       html += `
         <div class="city-loc" style="left:${pos.x}%;top:${pos.y}%" data-loc-id="${loc.id}">
           <div class="city-loc-icon-wrap">
-            <span class="city-loc-icon">${pos.icon}</span>
+            ${pos.img ? `<img src="${pos.img}" class="city-loc-img" alt="" />` : `<span class="city-loc-icon">${pos.icon}</span>`}
             ${loc.onlinePlayers > 0 ? `<span class="city-loc-badge">${loc.onlinePlayers}</span>` : ''}
           </div>
           <span class="city-loc-name">${loc.name}</span>
