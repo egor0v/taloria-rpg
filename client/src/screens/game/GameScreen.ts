@@ -339,11 +339,9 @@ function renderMap() {
       else if (isObstacle) cls += ' cell-obstacle';
       else cls += ' cell-floor';
 
-      // Walls are always visible (just impassable), fog only hides floor cells
-      if (!isWall) {
-        if (fogV === 0) cls += ' fog-hidden';
-        else if (fogV === 1) cls += ' fog-explored';
-      }
+      // Fog of war applies to ALL cells including walls
+      if (fogV === 0) cls += ' fog-hidden';
+      else if (fogV === 1) cls += ' fog-explored';
 
       // Highlights
       if (myHero && actionMode === 'move' && !isWall && fogV > 0 && !hero && !showMonster) {
