@@ -10,9 +10,9 @@
   display: flex;
   justify-content: center;
   gap: 6px;
-  padding: 12px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--panel-border);
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   overflow-x: auto;
 }
 .inv-hero-tab {
@@ -29,42 +29,22 @@
 .inv-tab-name { font-size: 0.75rem; font-weight: 600; }
 .inv-tab-meta { font-size: 0.58rem; color: var(--text-muted); }
 
-/* Header */
-.inv-header {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
-}
-
-.inv-hero-badge {
-  background: var(--panel);
-  border: 1px solid rgba(201, 162, 78, 0.25);
-  border-radius: 4px;
-  padding: 6px 14px;
-  text-align: right;
-}
-
-.inv-hero-name {
-  display: block;
-  font-family: var(--font-heading);
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--gold);
-}
-
-.inv-hero-meta {
-  color: var(--text-dim);
-  font-size: 0.78rem;
-}
+/* Header removed — hero name shown in tabs */
 
 /* Section titles */
 .inv-section-title {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--text-dim);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   text-transform: uppercase;
+}
+
+/* Center + Right columns: align top with portrait */
+.inv-center, .inv-right {
+  display: flex;
+  flex-direction: column;
 }
 
 /* ===== Layout ===== */
@@ -73,10 +53,15 @@
   grid-template-columns: 220px 240px 1fr;
   gap: 14px;
   margin-bottom: 24px;
+  border: 1px solid rgba(201, 162, 78, 0.15);
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(16, 20, 30, 0.4);
+  align-items: start;
 }
 
 /* ===== Left: Portrait + Stats ===== */
-.inv-left { display: flex; flex-direction: column; gap: 16px; }
+.inv-left { display: flex; flex-direction: column; gap: 12px; }
 
 .inv-portrait {
   width: 100%;

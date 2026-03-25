@@ -246,8 +246,10 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
   const abilities = hero.abilities || [];
   const baseAbilities = hero.baseAbilities || [];
 
-  // Calculate weight
-  const totalWeight = inventory.reduce((sum: number, item: any) => sum + (item.weight || 1) * (item.quantity || 1), 0);
+  // Calculate weight (inventory + equipment)
+  const invWeight = inventory.reduce((sum: number, item: any) => sum + (item.weight || 1) * (item.quantity || 1), 0);
+  const equipWeight = Object.values(equipment).reduce((sum: number, item: any) => sum + (item?.weight || 0), 0);
+  const totalWeight = invWeight + equipWeight;
   const maxWeight = 100 + hero.attack * 10;
   const weightPercent = Math.min(100, (totalWeight / maxWeight) * 100);
 
@@ -261,14 +263,6 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
   ];
 
   body.innerHTML = `
-      <!-- Header -->
-      <div class="inv-header">
-        <div class="inv-hero-badge">
-          <span class="inv-hero-name">${hero.name}</span>
-          <span class="inv-hero-meta">Ур.${hero.level} ${clsName}</span>
-        </div>
-      </div>
-
       <div class="inv-layout">
         <!-- Left: Portrait + Stats -->
         <div class="inv-left">
