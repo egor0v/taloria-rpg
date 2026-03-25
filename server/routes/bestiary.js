@@ -20,7 +20,7 @@ const TAB_MAP = {
   artifacts: { model: GameItem, filter: { type: { $in: ['jewelry', 'shield'] } } },
   equipment: { model: GameItem, filter: { type: { $in: ['armor', 'helmet', 'boots', 'pants'] } } },
   scrolls: { model: GameItem, filter: { type: 'scroll' } },
-  tools: { model: GameItem, filter: { type: { $in: ['tool', 'food', 'junk', 'quest'] } } },
+  tools: { model: GameItem, filter: { type: { $in: ['tool', 'food', 'provisions', 'junk', 'quest'] } } },
 };
 
 // GET /api/bestiary

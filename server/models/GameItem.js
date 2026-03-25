@@ -6,7 +6,7 @@ const gameItemSchema = new mongoose.Schema(
     name: { type: String, required: true },
     type: {
       type: String,
-      enum: ['weapon', 'armor', 'helmet', 'boots', 'pants', 'shield', 'ring', 'amulet', 'potion', 'scroll', 'tool', 'food', 'junk', 'quest', 'jewelry'],
+      enum: ['weapon', 'armor', 'helmet', 'boots', 'pants', 'shield', 'ring', 'amulet', 'potion', 'scroll', 'tool', 'food', 'provisions', 'junk', 'quest', 'jewelry'],
       required: true,
     },
     slot: {
