@@ -16,7 +16,7 @@ async function seed() {
   console.log('Connected to MongoDB');
 
   // --- MAPS ---
-  await GameMap.deleteMany({});
+  // Upsert maps (don't delete existing data from admin)
   const maps = [
     {
       mapId: 'forest-road',
@@ -41,11 +41,11 @@ async function seed() {
       active: true,
     },
   ];
-  await GameMap.insertMany(maps);
-  console.log(`Seeded ${maps.length} maps`);
+  for (const m of maps) { await GameMap.updateOne({ mapId: m.mapId }, { $setOnInsert: m }, { upsert: true }); }
+  console.log(`Seeded ${maps.length} maps (upsert)`);
 
   // --- MONSTERS ---
-  await MonsterTemplate.deleteMany({});
+  // Upsert monsters
   const monsters = [
     { type: 'goblin', name: 'Гоблин', hp: 12, armor: 2, attack: 2, agility: 3, moveRange: 3, vision: 4, attackRange: 1, damageDie: 'd4', xpReward: 15, goldMin: 1, goldMax: 5, aiType: 'aggressive', canTalk: true },
     { type: 'skeleton', name: 'Скелет', hp: 15, armor: 4, attack: 3, agility: 1, moveRange: 2, vision: 3, attackRange: 1, damageDie: 'd6', xpReward: 20, goldMin: 0, goldMax: 3, aiType: 'aggressive' },
@@ -57,11 +57,11 @@ async function seed() {
     { type: 'dark-mage', name: 'Тёмный маг', hp: 15, armor: 2, attack: 2, agility: 2, moveRange: 2, vision: 5, attackRange: 3, damageDie: 'd8', xpReward: 35, goldMin: 5, goldMax: 12, aiType: 'support' },
     { type: 'troll-boss', name: 'Тролль-вождь', hp: 60, armor: 6, attack: 7, agility: 2, moveRange: 2, vision: 4, attackRange: 1, damageDie: 'd10', xpReward: 80, goldMin: 15, goldMax: 30, aiType: 'boss' },
   ];
-  await MonsterTemplate.insertMany(monsters);
-  console.log(`Seeded ${monsters.length} monsters`);
+  for (const m of monsters) { await MonsterTemplate.updateOne({ type: m.type }, { $setOnInsert: m }, { upsert: true }); }
+  console.log(`Seeded ${monsters.length} monsters (upsert)`);
 
   // --- ITEMS ---
-  await GameItem.deleteMany({});
+  // Upsert items (never delete admin data)
   const items = [
     // Potions
     { itemId: 'potion-health-small', name: 'Малое зелье лечения', type: 'potion', slot: 'none', rarity: 'common', description: 'Восстанавливает 15 HP', usable: true, effect: { heal: 15 }, stackable: true, maxStack: 10, weight: 0.5, price: 5 },
@@ -94,11 +94,11 @@ async function seed() {
     { itemId: 'goblin-ear', name: 'Ухо гоблина', type: 'junk', slot: 'none', rarity: 'common', weight: 0.1, price: 1 },
     { itemId: 'troll-tooth', name: 'Зуб тролля', type: 'junk', slot: 'none', rarity: 'uncommon', weight: 0.2, price: 5 },
   ];
-  await GameItem.insertMany(items);
-  console.log(`Seeded ${items.length} items`);
+  for (const i of items) { await GameItem.updateOne({ $or: [{ itemId: i.itemId }, { name: i.name }] }, { $setOnInsert: i }, { upsert: true }); }
+  console.log(`Seeded ${items.length} items (upsert)`);
 
   // --- ABILITIES ---
-  await AbilityTemplate.deleteMany({});
+  // Upsert abilities
   const abilities = [
     // Warrior
     { abilityId: 'shield-bash', name: 'Удар щитом', type: 'class_ability', cls: 'warrior', branch: 'bastion', unlockLevel: 2, manaCost: 3, description: 'Оглушающий удар щитом', difficulty: 1, effect: { damage: 'd4', status: 'stunned', statusChance: 30 } },
@@ -127,11 +127,11 @@ async function seed() {
     { abilityId: 'elf-keen-sight', name: 'Острое зрение', type: 'passive', cls: 'any', description: '+1 к обзору', effect: { visionBonus: 1 } },
     { abilityId: 'dwarf-toughness', name: 'Стойкость', type: 'passive', cls: 'any', description: '+5 HP', effect: { hpBonus: 5 } },
   ];
-  await AbilityTemplate.insertMany(abilities);
-  console.log(`Seeded ${abilities.length} abilities`);
+  for (const a of abilities) { await AbilityTemplate.updateOne({ abilityId: a.abilityId }, { $setOnInsert: a }, { upsert: true }); }
+  console.log(`Seeded ${abilities.length} abilities (upsert)`);
 
   // --- SCENARIOS ---
-  await Scenario.deleteMany({});
+  // Upsert scenarios
   const scenarios = [
     {
       scenarioId: 'forest-road-goblins',
@@ -173,8 +173,8 @@ async function seed() {
       lossCondition: 'all_heroes_dead',
     },
   ];
-  await Scenario.insertMany(scenarios);
-  console.log(`Seeded ${scenarios.length} scenarios`);
+  for (const s of scenarios) { await Scenario.updateOne({ scenarioId: s.scenarioId }, { $setOnInsert: s }, { upsert: true }); }
+  console.log(`Seeded ${scenarios.length} scenarios (upsert)`);
 
   console.log('✅ Game data seeded successfully');
   process.exit(0);

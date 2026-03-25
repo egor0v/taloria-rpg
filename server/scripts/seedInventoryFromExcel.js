@@ -233,9 +233,10 @@ const ITEMS = [
     };
 
     try {
-      const existing = await GameItem.findOne({ itemId });
+      // Check by itemId OR by name to prevent duplicates
+      const existing = await GameItem.findOne({ $or: [{ itemId }, { name: item.name }] });
       if (existing) {
-        await GameItem.updateOne({ itemId }, { $set: data });
+        await GameItem.updateOne({ _id: existing._id }, { $set: { ...data, itemId: existing.itemId } });
         updated++;
       } else {
         await GameItem.create(data);
