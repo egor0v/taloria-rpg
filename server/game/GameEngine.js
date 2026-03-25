@@ -167,6 +167,8 @@ class GameEngine {
         return this.validateAbility(hero, action);
       case 'interact':
         return this.validateInteract(hero, action);
+      case 'search':
+        return this.validateSearch(hero, action);
       case 'end-turn':
         return { ok: true };
       default:
@@ -328,6 +330,9 @@ class GameEngine {
         break;
       case 'interact':
         result = this.executeInteract(action);
+        break;
+      case 'search':
+        result = this.executeSearch(action);
         break;
       case 'end-turn':
         result = this.executeEndTurn();
@@ -775,6 +780,85 @@ class GameEngine {
     }
 
     return results;
+  }
+
+  // ============================================================
+  // VALIDATE & EXECUTE: SEARCH (scouting)
+  // ============================================================
+
+  validateSearch(hero, action) {
+    if (this.gs.actionUsed) return { ok: false, error: 'Действие уже использовано' };
+    return { ok: true };
+  }
+
+  executeSearch(action) {
+    const hero = this.findHero(action.heroId);
+    const roll = this.rollDice(20);
+    const wisdomBonus = hero.wisdom || 0;
+    const total = roll + wisdomBonus;
+
+    // Search radius depends on roll: 10+ = vision, 15+ = vision+2, 20 = vision+4
+    let radius;
+    if (total >= 20) radius = (hero.vision || 4) + 4;
+    else if (total >= 15) radius = (hero.vision || 4) + 2;
+    else if (total >= 10) radius = hero.vision || 4;
+    else radius = Math.max(1, Math.floor((hero.vision || 4) / 2));
+
+    // Discover hidden objects and monsters in radius
+    const discovered = [];
+    const ROWS = this.gs.map.length;
+    const COLS = this.gs.map[0]?.length || 0;
+
+    for (let r = Math.max(0, hero.row - radius); r <= Math.min(ROWS - 1, hero.row + radius); r++) {
+      for (let c = Math.max(0, hero.col - radius); c <= Math.min(COLS - 1, hero.col + radius); c++) {
+        const dist = Math.abs(r - hero.row) + Math.abs(c - hero.col);
+        if (dist > radius) continue;
+
+        // Reveal fog
+        if (this.gs.fog[r] && this.gs.fog[r][c] < 2) {
+          this.gs.fog[r][c] = 2;
+        }
+
+        // Discover hidden monsters
+        for (const m of this.gs.monsters) {
+          if (m.row === r && m.col === c && m.alive && !m.discovered) {
+            m.discovered = true;
+            discovered.push({ type: 'monster', name: m.name, row: r, col: c });
+          }
+        }
+
+        // Discover hidden objects (traps, runes)
+        for (const obj of this.gs.objects) {
+          if (obj.row === r && obj.col === c && obj.hidden && !obj.discovered) {
+            obj.discovered = true;
+            discovered.push({ type: obj.type, name: obj.name || obj.type, row: r, col: c });
+          }
+        }
+      }
+    }
+
+    this.gs.actionUsed = true;
+    hero.actionUsed = true;
+
+    const success = total >= 10;
+    this.addLog(`🔍 ${hero.name} проводит разведку (d20=${roll}+${wisdomBonus}=${total}): радиус ${radius}, найдено ${discovered.length}`, success ? 'log-action' : 'log-damage');
+
+    return {
+      type: 'search',
+      heroId: hero.id, heroName: hero.name,
+      roll, bonus: wisdomBonus, total,
+      radius, success,
+      discovered,
+      diceRolls: [{
+        diceType: 'd20', roll, bonus: wisdomBonus,
+        label: '🔍 Разведка',
+        message: `${hero.name}: d20 + МУД(${wisdomBonus})`,
+        success,
+        resultText: success
+          ? `<span class="dice-result-success">✅ d20=${roll}+${wisdomBonus}=${total} — Радиус ${radius}, найдено: ${discovered.length}</span>`
+          : `<span class="dice-result-fail">❌ d20=${roll}+${wisdomBonus}=${total} — Почти ничего не видно</span>`,
+      }],
+    };
   }
 
   // ============================================================

@@ -241,6 +241,7 @@ function updateHUD() {
   const actionUsed = myHero?.actionUsed || gs.actionUsed;
   const bonusUsed = myHero?.bonusActionUsed || gs.bonusActionUsed;
   el('btn-attack')?.classList.toggle('action-btn--disabled', !!actionUsed);
+  el('btn-search')?.classList.toggle('action-btn--disabled', !!actionUsed);
   el('btn-ability')?.classList.toggle('action-btn--disabled', !!actionUsed);
   el('btn-item')?.classList.toggle('action-btn--disabled', !!bonusUsed);
   el('btn-interact')?.classList.toggle('action-btn--disabled', !!bonusUsed);
@@ -340,6 +341,11 @@ function renderMap() {
         const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
         if (dist <= 1) cls += ' cell-interactable';
       }
+      // Search highlight: vision range area
+      if (myHero && actionMode === 'search' && !isWall && fogV >= 0) {
+        const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
+        if (dist <= (myHero.vision || 4)) cls += ' cell-searchable';
+      }
 
       let content = '';
       if (hero) {
@@ -387,6 +393,13 @@ function onCellClick(x: number, y: number) {
   if (!sock || !gs) return;
   const myHero = getMyHero();
   if (!myHero) return;
+
+  // Search mode — click anywhere triggers search
+  if (actionMode === 'search') {
+    sock.emit('action-request', { type: 'search' });
+    actionMode = 'move';
+    return;
+  }
 
   // Click on hostile monster → attack (row=y, col=x)
   const monster = gs.monsters?.find((m: any) => m.alive && !m.friendly && m.discovered && m.col === x && m.row === y);
@@ -464,7 +477,7 @@ function setupActions(isSolo: boolean, isHost: boolean) {
       if (id === 'ability') { showAbilityPopup(); return; }
       if (id === 'item') { showItemPopup(); return; }
       if (id === 'interact') { actionMode = 'interact'; document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active')); document.getElementById('btn-interact')?.classList.add('action-btn--active'); if (gs) renderMap(); return; }
-      if (id === 'search') { sock?.emit('action-request', { type: 'search' }); return; }
+      if (id === 'search') { actionMode = 'search'; document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active')); document.getElementById('btn-search')?.classList.add('action-btn--active'); if (gs) renderMap(); return; }
       actionMode = id;
       document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active'));
       document.getElementById(`btn-${id}`)?.classList.add('action-btn--active');

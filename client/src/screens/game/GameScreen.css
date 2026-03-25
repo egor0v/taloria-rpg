@@ -90,6 +90,7 @@
   transition: background 0.15s;
   display: flex; align-items: center; justify-content: center;
   z-index: 1;
+  outline: 1px solid rgba(255,255,255,0.06);
 }
 /* All cells invisible — background image is the visual map */
 .cell-floor { background: transparent; }
@@ -104,6 +105,7 @@
 .cell-reachable-obstacle:hover { background: rgba(230,190,50,0.3) !important; }
 .cell-attackable { background: rgba(255,77,77,0.15) !important; box-shadow: inset 0 0 8px rgba(255,77,77,0.18); }
 .cell-interactable { background: rgba(100,180,255,0.2) !important; box-shadow: inset 0 0 8px rgba(100,180,255,0.25); border: 1px solid rgba(100,180,255,0.3); }
+.cell-searchable { background: rgba(180,130,255,0.12) !important; box-shadow: inset 0 0 6px rgba(180,130,255,0.15); border: 1px solid rgba(180,130,255,0.2); }
 
 /* Fog of war — must cover the parent's background image */
 .fog-hidden { background: #0a0806 !important; cursor: default; pointer-events: none; }
