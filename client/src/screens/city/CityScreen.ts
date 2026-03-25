@@ -13,7 +13,7 @@ const LOCATION_POSITIONS: Record<string, { x: number; y: number; icon: string; i
   'temple':    { x: 58, y: 22, icon: '⛪', img: '/uploads/city/hram.png' },
   'alchemist': { x: 78, y: 62, icon: '🧪', img: '/uploads/city/alhimik-lavka.png' },
   'herbalist': { x: 42, y: 75, icon: '🌿', img: '/uploads/city/hijina-travnicy.png' },
-  'shop-1':    { x: 48, y: 45, icon: '📚', img: '/uploads/city/books-lavka.png' },
+  'shop-1':    { x: 32, y: 68, icon: '📚', img: '/uploads/city/books-lavka.png' },
   'shop-2':    { x: 55, y: 50, icon: '💎', img: '/uploads/city/lavka-yuvelira.png' },
   'shop-3':    { x: 35, y: 35, icon: '✨', img: '/uploads/city/magik-lavka.png' },
   'shop-4':    { x: 62, y: 42, icon: '🏪', img: '/uploads/city/lavka-brona.png' },
