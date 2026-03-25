@@ -851,12 +851,13 @@ function showDiceResultPopup(roll: any, onDone: () => void) {
       <div class="dice-popup-title">${roll.label || '🎲 Бросок'}</div>
       <p class="dice-popup-message">${roll.message || ''}</p>
       <div class="dice-popup-dice-wrap">
-        <div class="dice-popup-dice dice-shaking" id="dice-anim-auto">
+        <div class="dice-popup-dice" id="dice-anim-auto">
           <img src="${diceImg}" alt="${diceType}" class="dice-img" />
         </div>
-        <div class="dice-popup-value" id="dice-value-auto">...</div>
+        <div class="dice-popup-value" id="dice-value-auto">${diceType.toUpperCase()}</div>
       </div>
       <div class="dice-popup-result" id="dice-result-auto" style="display:none"></div>
+      <button class="dice-popup-btn" id="btn-roll-auto">🎲 Бросить кубик</button>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -864,25 +865,29 @@ function showDiceResultPopup(roll: any, onDone: () => void) {
   const diceEl = document.getElementById('dice-anim-auto')!;
   const valueEl = document.getElementById('dice-value-auto')!;
   const resultEl = document.getElementById('dice-result-auto')!;
+  const btn = document.getElementById('btn-roll-auto')!;
 
-  // Animate random numbers then land on final
-  let count = 0;
-  const interval = setInterval(() => {
-    valueEl.textContent = String(Math.floor(Math.random() * maxVal) + 1);
-    count++;
-    if (count > 12) {
-      clearInterval(interval);
-      diceEl.classList.remove('dice-shaking');
-      valueEl.textContent = String(finalRoll);
-      valueEl.classList.add(success ? 'dice-value-success' : 'dice-value-fail');
-      diceEl.classList.add(success ? 'dice-success' : 'dice-fail');
-      resultEl.style.display = 'block';
-      resultEl.innerHTML = roll.resultText || (success
-        ? `<span class="dice-result-success">✅ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Успех!</span>`
-        : `<span class="dice-result-fail">❌ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Провал!</span>`);
-      setTimeout(() => { overlay.remove(); onDone(); }, 2000);
-    }
-  }, 80);
+  btn.addEventListener('click', () => {
+    btn.style.display = 'none';
+    diceEl.classList.add('dice-shaking');
+    let count = 0;
+    const interval = setInterval(() => {
+      valueEl.textContent = String(Math.floor(Math.random() * maxVal) + 1);
+      count++;
+      if (count > 15) {
+        clearInterval(interval);
+        diceEl.classList.remove('dice-shaking');
+        valueEl.textContent = String(finalRoll);
+        valueEl.classList.add(success ? 'dice-value-success' : 'dice-value-fail');
+        diceEl.classList.add(success ? 'dice-success' : 'dice-fail');
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = roll.resultText || (success
+          ? `<span class="dice-result-success">✅ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Успех!</span>`
+          : `<span class="dice-result-fail">❌ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Провал!</span>`);
+        setTimeout(() => { overlay.remove(); onDone(); }, 2500);
+      }
+    }, 80);
+  });
 }
 
 // ═══════════════════════════════════
