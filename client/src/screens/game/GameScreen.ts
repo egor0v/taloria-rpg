@@ -260,7 +260,7 @@ function renderMap() {
   const mapWidth = gs.mapWidth || (map[0]?.length || 1);
   const myHero = getMyHero();
 
-  let html = `<div class="tactical-grid" style="grid-template-columns:repeat(${mapWidth},var(--cell-size,40px));${bgImage ? `background-image:url(${bgImage});background-size:cover;` : ''}">`;
+  let html = `<div class="tactical-grid" style="grid-template-columns:repeat(${mapWidth},var(--cell-size,40px));${bgImage ? `background-image:url(${bgImage});background-size:100% 100%;background-repeat:no-repeat;` : ''}">`;
 
   for (let y = 0; y < mapHeight; y++) {
     for (let x = 0; x < mapWidth; x++) {
