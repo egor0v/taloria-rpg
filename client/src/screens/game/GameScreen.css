@@ -81,13 +81,15 @@
 .tactical-grid {
   display: grid; gap: 0;
   --cell-size: 40px;
+  position: relative;
 }
+.map-bg-img { display: block; }
 .map-cell {
   width: var(--cell-size); height: var(--cell-size);
   position: relative; cursor: pointer;
   transition: background 0.15s;
   display: flex; align-items: center; justify-content: center;
-  outline: none;
+  z-index: 1;
 }
 /* All cells invisible — background image is the visual map */
 .cell-floor { background: transparent; }

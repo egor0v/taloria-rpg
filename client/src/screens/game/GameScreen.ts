@@ -269,12 +269,15 @@ function renderMap() {
   const myHero = getMyHero();
 
   const cellSizePx = 40;
-  let gridStyle = `grid-template-columns:repeat(${mapWidth},${cellSizePx}px);`;
+  const gridW = mapWidth * cellSizePx;
+  const gridH = mapHeight * cellSizePx;
+  let gridStyle = `grid-template-columns:repeat(${mapWidth},${cellSizePx}px);width:${gridW}px;height:${gridH}px;position:relative;`;
+  let bgHtml = '';
   if (bgImage) {
-    const cacheBust = bgImage + (bgImage.includes('?') ? '&' : '?') + 'v=' + Date.now();
-    gridStyle += `background-image:url(${cacheBust});background-size:100% 100%;background-repeat:no-repeat;`;
+    const cacheBust = bgImage + (bgImage.includes('?') ? '&' : '?') + 'v=2';
+    bgHtml = `<img src="${cacheBust}" class="map-bg-img" style="position:absolute;top:0;left:0;width:${gridW}px;height:${gridH}px;pointer-events:none;z-index:0;" />`;
   }
-  let html = `<div class="tactical-grid" style="${gridStyle}">`;
+  let html = `<div class="tactical-grid" style="${gridStyle}">${bgHtml}`;
 
   for (let y = 0; y < mapHeight; y++) {
     for (let x = 0; x < mapWidth; x++) {
