@@ -209,9 +209,27 @@ function getIcon(tab: string, item: any): string {
 }
 
 function getAutoDesc(item: any, tab: string): string {
-  if (tab === 'monsters') return `${item.aiType || ''} · Обзор ${item.vision || 0} · Ход ${item.moveRange || 0}`;
-  if (['spells', 'abilities'].includes(tab)) return item.effect ? formatEffect(item.effect).slice(0, 80) : '';
-  return item.type || '';
+  if (tab === 'monsters') {
+    const aiLabels: Record<string, string> = { aggressive: 'Агрессивный', defensive: 'Оборонительный', support: 'Поддержка', coward: 'Трусливый', boss: 'Босс', scout: 'Разведчик', warrior: 'Воин', archer: 'Лучник', flanker: 'Фланкер' };
+    return `${aiLabels[item.aiType] || item.aiType || 'Враждебный'} · Обзор ${item.vision || 0} · Ход ${item.moveRange || 0}`;
+  }
+  if (['spells', 'abilities'].includes(tab)) return item.description || (item.effect ? formatEffect(item.effect).slice(0, 80) : '');
+  // Beautiful description for items
+  if (item.description && !item.description.includes('категории') && !item.description.includes('продаётся')) return item.description;
+  if (item.characteristics) return item.characteristics;
+  if (item.advantages) return item.advantages;
+  // Generate description from effects
+  if (item.effect) return formatEffect(item.effect).slice(0, 80);
+  if (item.damage?.die) return `Урон: ${item.damage.die}${item.damage.bonus ? '+' + item.damage.bonus : ''}`;
+  if (item.stats) {
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(item.stats as Record<string, number>)) {
+      const labels: Record<string, string> = { attack: 'Атака', armor: 'Защита', agility: 'Ловкость', intellect: 'Интеллект', wisdom: 'Мудрость', charisma: 'Харизма', quality: 'Качество', durability: 'Прочность' };
+      if (v) parts.push(`${labels[k] || k} +${v}`);
+    }
+    return parts.join(' · ');
+  }
+  return '';
 }
 
 function getClsLabel(cls: string): string {
@@ -323,6 +341,15 @@ function addBestiaryStyles() {
     .bps-label { font-size:0.78rem;color:var(--text-dim,#9a9a9e); }
     .bps-val { font-size:0.82rem;font-weight:600;color:var(--text,#e8e6e0); }
     .bps-effect { font-size:0.78rem;color:var(--gold-dim,#c9a24e);line-height:1.5; }
+    .bps-section { margin-top:16px; }
+    .bps-section-title { font-size:0.72rem;font-weight:700;color:var(--text-dim,#9a9a9e);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.06); }
+    .bps-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px; }
+    .bps-stat { text-align:center;padding:8px 4px;background:rgba(255,255,255,0.02);border-radius:6px; }
+    .bps-stat-val { display:block;font-size:1.1rem;font-weight:800;font-family:var(--font-heading,serif); }
+    .bps-stat-lbl { display:block;font-size:0.6rem;color:var(--text-dim);margin-top:2px;text-transform:uppercase;letter-spacing:0.04em; }
+    .bps-stat--red { color:#ff6b6b; } .bps-stat--orange { color:#ff8c42; } .bps-stat--blue { color:#7daaff; }
+    .bps-stat--green { color:#50e878; } .bps-stat--gold { color:#e8c85a; }
+    .bps-effect-text { font-size:0.82rem;color:var(--gold-dim,#c9a24e);line-height:1.6;margin:0; }
 
     @media (max-width: 900px) { .best-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 500px) { .best-grid { grid-template-columns: 1fr; } .best-tabs { justify-content: flex-start; overflow-x: auto; } .best-tab { font-size: 0.75rem; padding: 10px 12px; white-space: nowrap; } }
@@ -448,50 +475,82 @@ function openDetailPopup(item: any, tab: string) {
       ${item.rarity ? `<div class="best-popup-rarity" style="color:${nColor}">${getRarityLabel(item.rarity)}</div>` : ''}
 
       <!-- Description -->
-      <p class="best-popup-desc">${item.description || ''}</p>
+      <p class="best-popup-desc">${(() => {
+        // Beautiful text description (no raw type/slot)
+        const desc = item.description || '';
+        // Filter out auto-generated ugly descriptions
+        if (desc && !desc.includes('категории') && !desc.includes('продаётся в')) return desc;
+        if (item.characteristics) return item.characteristics;
+        if (item.advantages) return item.advantages;
+        return '';
+      })()}</p>
 
-      <!-- Stats Grid -->
-      <div class="best-popup-stats">
-        ${isMonster ? `
-          <div class="bps-row"><span class="bps-label">❤ Здоровье</span><span class="bps-val">${item.hp}</span></div>
-          <div class="bps-row"><span class="bps-label">⚔ Атака</span><span class="bps-val">${item.attack}</span></div>
-          <div class="bps-row"><span class="bps-label">🛡 Броня</span><span class="bps-val">${item.armor}</span></div>
-          <div class="bps-row"><span class="bps-label">🏃 Ловкость</span><span class="bps-val">${item.agility || 0}</span></div>
-          <div class="bps-row"><span class="bps-label">👁 Обзор</span><span class="bps-val">${item.vision || 0}</span></div>
-          <div class="bps-row"><span class="bps-label">🚶 Дальн. хода</span><span class="bps-val">${item.moveRange || 0}</span></div>
-          <div class="bps-row"><span class="bps-label">🎯 Дальн. атаки</span><span class="bps-val">${item.attackRange || 1}</span></div>
-          <div class="bps-row"><span class="bps-label">🎲 Кубик урона</span><span class="bps-val">${item.damageDie || 'd6'}</span></div>
-          <div class="bps-row"><span class="bps-label">✦ Опыт</span><span class="bps-val">${item.xpReward || 0} XP</span></div>
-          <div class="bps-row"><span class="bps-label">💰 Золото</span><span class="bps-val">${item.goldMin || 0}–${item.goldMax || 0}</span></div>
-          <div class="bps-row"><span class="bps-label">🧠 AI тип</span><span class="bps-val">${item.aiType || '—'}</span></div>
-          ${item.canTalk ? '<div class="bps-row"><span class="bps-label">💬 Диалог</span><span class="bps-val">Да</span></div>' : ''}
-          ${item.abilities?.length ? `<div class="bps-row bps-row--wide"><span class="bps-label">✨ Способности</span><span class="bps-val">${item.abilities.join(', ')}</span></div>` : ''}
-        ` : ''}
-
-        ${isAbility ? `
-          <div class="bps-row"><span class="bps-label">📂 Тип</span><span class="bps-val">${item.type || '—'}</span></div>
-          ${item.cls ? `<div class="bps-row"><span class="bps-label">⚔ Класс</span><span class="bps-val">${getClsLabel(item.cls)}</span></div>` : ''}
-          ${item.branch ? `<div class="bps-row"><span class="bps-label">🌿 Ветка</span><span class="bps-val">${item.branch}</span></div>` : ''}
-          ${item.manaCost ? `<div class="bps-row"><span class="bps-label">💧 Мана</span><span class="bps-val">${item.manaCost} MP</span></div>` : ''}
-          ${item.cooldown ? `<div class="bps-row"><span class="bps-label">⏱ Перезарядка</span><span class="bps-val">${item.cooldown} ходов</span></div>` : ''}
-          ${item.unlockLevel ? `<div class="bps-row"><span class="bps-label">★ Уровень</span><span class="bps-val">${item.unlockLevel}</span></div>` : ''}
-          ${item.difficulty ? `<div class="bps-row"><span class="bps-label">📊 Сложность</span><span class="bps-val">${item.difficulty}/6</span></div>` : ''}
-          ${item.effect ? `<div class="bps-row bps-row--wide"><span class="bps-label">⚡ Эффект</span><span class="bps-val bps-effect">${formatEffect(item.effect)}</span></div>` : ''}
-        ` : ''}
-
-        ${isItem ? `
-          <div class="bps-row"><span class="bps-label">📂 Тип</span><span class="bps-val">${item.type || '—'}</span></div>
-          ${item.slot && item.slot !== 'none' ? `<div class="bps-row"><span class="bps-label">📍 Слот</span><span class="bps-val">${item.slot}</span></div>` : ''}
-          ${item.damage?.die ? `<div class="bps-row"><span class="bps-label">⚔ Урон</span><span class="bps-val">${item.damage.die}${item.damage.bonus ? ' +' + item.damage.bonus : ''}</span></div>` : ''}
-          ${item.range ? `<div class="bps-row"><span class="bps-label">🎯 Дальность</span><span class="bps-val">${item.range}</span></div>` : ''}
-          ${item.weight ? `<div class="bps-row"><span class="bps-label">⚖ Вес</span><span class="bps-val">${item.weight}</span></div>` : ''}
-          ${item.stats ? Object.entries(item.stats).map(([k, v]) => `<div class="bps-row"><span class="bps-label">📈 ${k}</span><span class="bps-val">+${v}</span></div>`).join('') : ''}
-          ${item.effect?.heal ? `<div class="bps-row"><span class="bps-label">❤ Лечение</span><span class="bps-val">+${item.effect.heal} HP</span></div>` : ''}
-          ${item.effect?.mana ? `<div class="bps-row"><span class="bps-label">💧 Мана</span><span class="bps-val">+${item.effect.mana} MP</span></div>` : ''}
-          ${item.stackable ? `<div class="bps-row"><span class="bps-label">📦 Стакается</span><span class="bps-val">до ${item.maxStack || 99}</span></div>` : ''}
-          ${item.effect && !item.effect.heal && !item.effect.mana ? `<div class="bps-row bps-row--wide"><span class="bps-label">⚡ Эффект</span><span class="bps-val bps-effect">${formatEffect(item.effect)}</span></div>` : ''}
-        ` : ''}
+      ${isMonster ? `
+      <!-- Monster: Characteristics -->
+      <div class="bps-section"><h4 class="bps-section-title">⚔ Боевые характеристики</h4>
+        <div class="bps-grid">
+          <div class="bps-stat"><span class="bps-stat-val bps-stat--red">${item.hp}</span><span class="bps-stat-lbl">Здоровье</span></div>
+          <div class="bps-stat"><span class="bps-stat-val bps-stat--orange">${item.attack}</span><span class="bps-stat-lbl">Атака</span></div>
+          <div class="bps-stat"><span class="bps-stat-val bps-stat--blue">${item.armor}</span><span class="bps-stat-lbl">Броня</span></div>
+          <div class="bps-stat"><span class="bps-stat-val">${item.agility || 0}</span><span class="bps-stat-lbl">Ловкость</span></div>
+          <div class="bps-stat"><span class="bps-stat-val">${item.damageDie || 'd6'}</span><span class="bps-stat-lbl">Урон</span></div>
+          <div class="bps-stat"><span class="bps-stat-val bps-stat--green">${item.xpReward || 0}</span><span class="bps-stat-lbl">XP</span></div>
+        </div>
       </div>
+      <div class="bps-section"><h4 class="bps-section-title">📋 Параметры</h4>
+        <div class="best-popup-stats">
+          <div class="bps-row"><span class="bps-label">Обзор</span><span class="bps-val">${item.vision || 0} клеток</span></div>
+          <div class="bps-row"><span class="bps-label">Дальность хода</span><span class="bps-val">${item.moveRange || 0} клеток</span></div>
+          <div class="bps-row"><span class="bps-label">Дальность атаки</span><span class="bps-val">${item.attackRange || 1} клетка</span></div>
+          <div class="bps-row"><span class="bps-label">Добыча</span><span class="bps-val">${item.goldMin || 0}–${item.goldMax || 0} монет</span></div>
+          ${item.canTalk ? '<div class="bps-row"><span class="bps-label">Диалог</span><span class="bps-val">Можно поговорить</span></div>' : ''}
+        </div>
+      </div>
+      ${item.abilities?.length ? `<div class="bps-section"><h4 class="bps-section-title">✨ Способности</h4><p class="bps-effect-text">${item.abilities.join(', ')}</p></div>` : ''}
+      ` : ''}
+
+      ${isAbility ? `
+      <!-- Ability: Info -->
+      <div class="bps-section"><h4 class="bps-section-title">📋 Параметры</h4>
+        <div class="best-popup-stats">
+          ${item.cls && item.cls !== 'any' ? `<div class="bps-row"><span class="bps-label">Класс</span><span class="bps-val">${getClsLabel(item.cls)}</span></div>` : ''}
+          ${item.branch ? `<div class="bps-row"><span class="bps-label">Ветка развития</span><span class="bps-val">${item.branch}</span></div>` : ''}
+          ${item.manaCost ? `<div class="bps-row"><span class="bps-label">Стоимость маны</span><span class="bps-val bps-stat--blue">${item.manaCost} MP</span></div>` : ''}
+          ${item.cooldown ? `<div class="bps-row"><span class="bps-label">Перезарядка</span><span class="bps-val">${item.cooldown} ходов</span></div>` : ''}
+          ${item.unlockLevel ? `<div class="bps-row"><span class="bps-label">Доступно с уровня</span><span class="bps-val bps-stat--gold">${item.unlockLevel}</span></div>` : ''}
+          ${item.difficulty ? `<div class="bps-row"><span class="bps-label">Сложность</span><span class="bps-val">${'★'.repeat(item.difficulty)}${'☆'.repeat(6 - item.difficulty)}</span></div>` : ''}
+        </div>
+      </div>
+      ${item.effect ? `<div class="bps-section"><h4 class="bps-section-title">⚡ Эффект</h4><p class="bps-effect-text">${formatEffect(item.effect)}</p></div>` : ''}
+      ` : ''}
+
+      ${isItem ? `
+      <!-- Item: Characteristics -->
+      ${(item.damage?.die || item.stats || item.range || item.weight) ? `
+      <div class="bps-section"><h4 class="bps-section-title">📋 Характеристики</h4>
+        <div class="best-popup-stats">
+          ${item.damage?.die ? `<div class="bps-row"><span class="bps-label">Урон</span><span class="bps-val bps-stat--red">${item.damage.die}${item.damage.bonus ? ' +' + item.damage.bonus : ''}</span></div>` : ''}
+          ${item.range ? `<div class="bps-row"><span class="bps-label">Дальность</span><span class="bps-val">${item.range} клеток</span></div>` : ''}
+          ${item.weight ? `<div class="bps-row"><span class="bps-label">Вес</span><span class="bps-val">${item.weight} кг</span></div>` : ''}
+          ${item.stats ? Object.entries(item.stats).map(([k, v]) => {
+            const statLabels: Record<string, string> = { attack: 'Атака', armor: 'Защита', agility: 'Ловкость', intellect: 'Интеллект', wisdom: 'Мудрость', charisma: 'Харизма', quality: 'Качество', durability: 'Прочность', hp: 'Здоровье' };
+            return v ? '<div class="bps-row"><span class="bps-label">' + (statLabels[k] || k) + '</span><span class="bps-val bps-stat--green">+' + v + '</span></div>' : '';
+          }).join('') : ''}
+        </div>
+      </div>` : ''}
+
+      <!-- Item: Effects -->
+      ${item.effect ? `
+      <div class="bps-section"><h4 class="bps-section-title">⚡ Эффект при использовании</h4>
+        <p class="bps-effect-text">${formatEffect(item.effect)}</p>
+      </div>` : ''}
+
+      <!-- Item: Advantages -->
+      ${item.advantages && !item.advantages.includes('Повышает эффективность') ? `
+      <div class="bps-section"><h4 class="bps-section-title">✨ Преимущества</h4>
+        <p class="bps-effect-text">${item.advantages}</p>
+      </div>` : ''}
+      ` : ''}
     </div>
   `;
 
