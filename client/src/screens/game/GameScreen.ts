@@ -260,13 +260,11 @@ function renderMap() {
   const mapWidth = gs.mapWidth || (map[0]?.length || 1);
   const myHero = getMyHero();
 
-  // Calculate cell size to preserve image aspect ratio
   const cellSizePx = 40;
   let gridStyle = `grid-template-columns:repeat(${mapWidth},${cellSizePx}px);`;
   if (bgImage) {
-    // Grid total size = mapWidth * cellSize x mapHeight * cellSize
-    // Use cover + center so image is not deformed
-    gridStyle += `background-image:url(${bgImage});background-size:cover;background-position:center;background-repeat:no-repeat;`;
+    // 100% 100% ensures bg image aligns exactly with grid cells (no offset)
+    gridStyle += `background-image:url(${bgImage});background-size:100% 100%;background-repeat:no-repeat;`;
   }
   let html = `<div class="tactical-grid" style="${gridStyle}">`;
 
