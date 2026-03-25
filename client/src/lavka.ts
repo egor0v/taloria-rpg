@@ -337,10 +337,12 @@ function addLavkaStyles() {
     .lavka-section-title { font-family: var(--font-heading); font-size: 1.4rem; color: var(--gold); margin-bottom: 24px; }
 
     /* Subscription Cards */
-    .lavka-sub-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
-    .lavka-sub-card { background: linear-gradient(180deg, rgba(20,18,14,0.95), rgba(14,12,10,0.98)); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 32px 24px; text-align: center; position: relative; transition: border-color 0.3s; }
+    .lavka-sub-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
+    .lavka-sub-card { background: linear-gradient(180deg, rgba(20,18,14,0.95), rgba(14,12,10,0.98)); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 32px 24px; text-align: center; position: relative; transition: border-color 0.3s; display: flex; flex-direction: column; }
     .lavka-sub-card:hover { border-color: rgba(201,162,78,0.3); }
     .lavka-sub-card--recommended { border-color: rgba(163,53,238,0.4); }
+    .lavka-sub-features { flex: 1; }
+    .lavka-buy-btn { margin-top: auto; }
     .lavka-sub-tier { font-family: var(--font-heading); font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; }
     .lavka-sub-desc { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 20px; }
     .lavka-sub-price { font-family: var(--font-heading); font-size: 2rem; font-weight: 700; color: var(--gold); }
@@ -398,6 +400,7 @@ function addLavkaStyles() {
       .lavka-tabs { overflow-x: auto; justify-content: flex-start; }
       .lavka-tab { white-space: nowrap; font-size: 0.75rem; padding: 12px 14px; }
       .lavka-sub-cards { grid-template-columns: 1fr; }
+      @media (min-width: 600px) and (max-width: 900px) { .lavka-sub-cards { grid-template-columns: repeat(2, 1fr); } }
       .lavka-title { font-size: 1.8rem; }
     }
   `;
