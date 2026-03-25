@@ -178,7 +178,8 @@ export function renderAbout(container: HTMLElement): void {
   .lp-hero-inner { position: relative; z-index: 2; }
   .lp-logo { width: 110px; height: 110px; object-fit: contain; filter: drop-shadow(0 4px 24px rgba(201,162,78,0.35)); margin-bottom: 12px; }
   .lp-brand { font-family: var(--font-heading, 'Cinzel', serif); font-size: 4.2rem; font-weight: 900; color: var(--gold, #f6c86d); letter-spacing: 0.18em; margin: 0; text-shadow: 0 2px 30px rgba(201,162,78,0.4), 0 4px 60px rgba(0,0,0,0.5); }
-  .lp-title-logo { max-width: 500px; width: 80%; height: auto; margin: 0 auto 16px; display: block; filter: drop-shadow(0 4px 30px rgba(201,162,78,0.3)); }
+  .lp-title-logo { max-width: 75vw; width: 900px; height: auto; margin: -40px auto 0; display: block; filter: drop-shadow(0 4px 30px rgba(201,162,78,0.3)); }
+  .lp-hero .lp-sub { margin-top: -10px; }
   .lp-divider { text-align: center; margin: 14px 0; display: flex; align-items: center; justify-content: center; gap: 16px; }
   .lp-divider::before, .lp-divider::after { content: ''; flex: 1; max-width: 200px; height: 1px; background: linear-gradient(90deg, transparent, rgba(201,162,78,0.3), transparent); }
   .lp-rune { color: var(--gold); font-size: 0.7rem; }
