@@ -176,38 +176,91 @@ router.get('/store-orders', adminAuth(), async (req, res, next) => {
 });
 
 // --- METRICS ---
+// Metrics constants from design repo
+const REAL_PAGES = ['/', '/about', '/admin', '/lavka', '/bestiary', '/dashboard', '/game', '/login', '/register', '/profile', '/lobby', '/inventory', '/city', '/create', '/scenario'];
+const REFERRER_SPAM_RE = /nanobanan\.ru|finist\.services|podario\.ru|vortex-fm\.ru|semalt\.com|buttons-for-website\.com|darodar\.com|ilovevitaly\.com|priceg\.com|hulfingtonpost\.com|best-seo-offer\.com|best-seo-solution\.com/i;
+
+/**
+ * GET /api/admin/metrics?period=day|week|month|quarter
+ * Returns time-series data (visits + unique visitors) and referrer sources.
+ * Based on design repo metrics implementation.
+ */
 router.get('/metrics', adminAuth(), async (req, res, next) => {
   try {
-    const { period = '7d' } = req.query;
-    const days = period === '30d' ? 30 : period === '1d' ? 1 : 7;
-    const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const period = req.query.period || 'week';
+    const now = new Date();
+    let since, groupId;
 
-    const [views, uniqueVisitors] = await Promise.all([
-      PageView.countDocuments({ createdAt: { $gte: since } }),
-      PageView.distinct('visitorId', { createdAt: { $gte: since } }),
+    if (period === 'day') {
+      since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      groupId = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' }, day: { $dayOfMonth: '$createdAt' }, hour: { $hour: '$createdAt' } };
+    } else if (period === 'week') {
+      since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      groupId = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' }, day: { $dayOfMonth: '$createdAt' } };
+    } else if (period === 'month') {
+      since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      groupId = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' }, day: { $dayOfMonth: '$createdAt' } };
+    } else { // quarter
+      since = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      groupId = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } };
+    }
+
+    const baseMatch = { createdAt: { $gte: since }, path: { $in: REAL_PAGES } };
+
+    // Time-series
+    const timeSeries = await PageView.aggregate([
+      { $match: baseMatch },
+      { $group: { _id: groupId, views: { $sum: 1 }, uniqueVisitors: { $addToSet: '$visitorId' } } },
+      { $project: { _id: 1, views: 1, unique: { $size: '$uniqueVisitors' } } },
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1, '_id.hour': 1 } },
     ]);
 
-    const byDay = await PageView.aggregate([
-      { $match: { createdAt: { $gte: since } } },
-      { $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-        views: { $sum: 1 },
-        unique: { $addToSet: '$visitorId' },
+    // Referrer sources
+    const sources = await PageView.aggregate([
+      { $match: baseMatch },
+      { $project: {
+        source: {
+          $cond: {
+            if: { $and: [{ $ne: ['$utmSource', ''] }, { $ne: ['$utmSource', null] }] },
+            then: '$utmSource',
+            else: { $cond: { if: { $or: [{ $eq: ['$referrer', ''] }, { $eq: ['$referrer', null] }] }, then: 'Прямой заход', else: '$referrer' } }
+          }
+        },
+        visitorId: 1,
       }},
-      { $project: { date: '$_id', views: 1, unique: { $size: '$unique' } } },
-      { $sort: { date: 1 } },
+      { $group: { _id: '$source', views: { $sum: 1 }, uniqueVisitors: { $addToSet: '$visitorId' } } },
+      { $project: { source: '$_id', views: 1, unique: { $size: '$uniqueVisitors' } } },
+      { $sort: { views: -1 } },
+      { $limit: 20 },
     ]);
 
+    const cleanSources = sources.filter(s => !REFERRER_SPAM_RE.test(s.source));
+
+    // By page
     const byPage = await PageView.aggregate([
-      { $match: { createdAt: { $gte: since } } },
+      { $match: baseMatch },
       { $group: { _id: '$path', views: { $sum: 1 } } },
       { $sort: { views: -1 } },
       { $limit: 20 },
     ]);
 
+    // By day (backwards compat)
+    const byDay = await PageView.aggregate([
+      { $match: baseMatch },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, views: { $sum: 1 }, unique: { $addToSet: '$visitorId' } } },
+      { $project: { date: '$_id', views: 1, unique: { $size: '$unique' } } },
+      { $sort: { date: 1 } },
+    ]);
+
+    const totalViews = timeSeries.reduce((s, b) => s + b.views, 0);
+    const allVisitors = await PageView.distinct('visitorId', baseMatch);
+
     res.json({
-      totalViews: views,
-      uniqueVisitors: uniqueVisitors.length,
+      period, since,
+      totalViews,
+      uniqueVisitors: allVisitors.length,
+      timeSeries,
+      sources: cleanSources,
       byDay,
       byPage,
     });

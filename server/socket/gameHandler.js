@@ -1,17 +1,83 @@
+'use strict';
+
 /**
- * Game Socket Handler — WebSocket event processing for Taloria RPG
- * Based on game-implementation-guide.md §19
+ * Game Socket Handler — adapted from design repo
+ * Wraps design's gameHandler(io, socket) in namespace architecture
  */
 
 const GameSession = require('../models/GameSession');
-const logger = require('../services/logger');
 const GameEngine = require('../game/GameEngine');
 
-// In-memory active game states (sessionId → gameState)
+// In-memory state
 const activeGames = new Map();
-
-// Debounced save timers
+const activeEngines = new Map();
+const eventBuffers = new Map();
+const EVENT_BUFFER_SIZE = 20;
 const saveTimers = new Map();
+const DB_SAVE_INTERVAL = 5000;
+
+function bufferEvent(sessionId, event) {
+  if (!eventBuffers.has(sessionId)) eventBuffers.set(sessionId, []);
+  const buf = eventBuffers.get(sessionId);
+  buf.push(event);
+  if (buf.length > EVENT_BUFFER_SIZE) buf.shift();
+}
+
+function debouncedSave(sessionId, gameState) {
+  if (saveTimers.has(sessionId)) clearTimeout(saveTimers.get(sessionId));
+  saveTimers.set(sessionId, setTimeout(async () => {
+    try {
+      await GameSession.findByIdAndUpdate(sessionId, { gameState });
+    } catch (err) {
+      console.error('DB save error:', err);
+    }
+    saveTimers.delete(sessionId);
+  }, DB_SAVE_INTERVAL));
+}
+
+function getOrCreateEngine(sessionId, gameState, players) {
+  let engine = activeEngines.get(sessionId);
+  if (!engine) {
+    engine = new GameEngine(gameState, sessionId, players);
+    activeEngines.set(sessionId, engine);
+  } else {
+    engine.gs = gameState;
+    engine.players = players || engine.players;
+  }
+  return engine;
+}
+
+async function advanceExploreTurn(sessionId, gameNsp, reason, heroId) {
+  const gs = activeGames.get(sessionId);
+  if (!gs || gs.mode === 'combat') return;
+
+  // Reset hero turn state
+  const hero = heroId ? gs.heroes.find(h => h.id === heroId) : gs.heroes[gs.activeHeroIdx || 0];
+  if (hero) {
+    hero.moveUsed = false;
+    hero.actionUsed = false;
+    hero.bonusActionUsed = false;
+    hero.stepsRemaining = hero.moveRange || 2;
+  }
+
+  // Advance to next hero
+  gs.activeHeroIdx = ((gs.activeHeroIdx || 0) + 1) % gs.heroes.length;
+  gs.round = (gs.round || 0) + 1;
+
+  const payload = {
+    action: { type: 'end-turn', heroId: hero?.id, auto: reason === 'disconnect' },
+    result: { type: 'end-turn', round: gs.round },
+    gameState: gs,
+  };
+
+  bufferEvent(sessionId, payload);
+  gameNsp.to(`session:${sessionId}`).emit('action-result', payload);
+  debouncedSave(sessionId, gs);
+}
+
+// ============================================================
+// SETUP (namespace wrapper)
+// ============================================================
 
 function setupGameHandler(io) {
   const gameNsp = io.of('/game');
@@ -22,26 +88,23 @@ function setupGameHandler(io) {
     if (!userId) return next(new Error('userId required'));
     socket.userId = userId;
     socket.displayName = socket.handshake.auth?.displayName || 'Игрок';
+    // Compat with design code (socket.user.id)
+    socket.user = { id: userId, displayName: socket.displayName };
     next();
   });
 
   gameNsp.on('connection', (socket) => {
-    logger.info('Game socket connected', { userId: socket.userId });
+    console.log(`🎮 Game socket connected: ${socket.displayName} (${socket.id})`);
 
-    // ─── JOIN SESSION ───
-    socket.on('join-session', async (data) => {
+    // --- Join session ---
+    socket.on('join-session', async ({ sessionId }) => {
       try {
-        const { sessionId } = data;
-        if (!sessionId) return socket.emit('action-error', { message: 'sessionId required' });
-
         const session = await GameSession.findById(sessionId);
-        if (!session) return socket.emit('action-error', { message: 'Сессия не найдена' });
+        if (!session) return socket.emit('error', { message: 'Сессия не найдена' });
 
-        // Verify player is in session
         const isPlayer = session.players.some(p => p.userId?.toString() === socket.userId);
-        if (!isPlayer) return socket.emit('action-error', { message: 'Вы не участник этой сессии' });
+        if (!isPlayer) return socket.emit('error', { message: 'Вы не участник этой сессии' });
 
-        // Join socket room
         socket.join(`session:${sessionId}`);
         socket.sessionId = sessionId;
 
@@ -52,200 +115,300 @@ function setupGameHandler(io) {
           await session.save().catch(() => {});
         }
 
-        // Get or create game state
-        let gameState = activeGames.get(sessionId);
-
-        // Try DB fallback
-        if (!gameState || !gameState.map || !gameState.heroes?.length) {
-          if (session.gameState?.map && session.gameState?.heroes?.length) {
-            gameState = session.gameState;
-            activeGames.set(sessionId, gameState);
-          }
+        // Get or initialize game state
+        let gs = activeGames.get(sessionId);
+        if (!gs && session.gameState?.heroes?.length) {
+          gs = session.gameState;
+          activeGames.set(sessionId, gs);
         }
 
-        // Auto-initialize if session is playing but no game state
-        if (session.status === 'playing' && (!gameState || !gameState.map || !gameState.heroes?.length)) {
-          logger.info('Auto-initializing game', { sessionId });
+        // Auto-init if playing but no state
+        if (session.status === 'playing' && (!gs || !gs.heroes?.length)) {
           try {
-            gameState = await GameEngine.initializeGame(session);
-            activeGames.set(sessionId, gameState);
-            session.gameState = gameState;
+            gs = await GameEngine.initializeFromDB(session);
+            activeGames.set(sessionId, gs);
+            session.gameState = gs;
             await session.save().catch(() => {});
-            // Notify all players
-            gameNsp.to(`session:${sessionId}`).emit('game-started', { gameState });
+            gameNsp.to(`session:${sessionId}`).emit('game-started', { gameState: gs });
           } catch (err) {
-            logger.error('Init failed', { error: err.message });
-            return socket.emit('action-error', { message: 'Ошибка инициализации: ' + err.message });
+            console.error('Auto-init failed:', err.message);
+            return socket.emit('error', { message: 'Ошибка инициализации: ' + err.message });
           }
         }
 
         // Send current state
-        socket.emit('game-state', { gameState: gameState || null, session: { _id: session._id, status: session.status, players: session.players } });
+        socket.emit('game-state', {
+          gameState: gs || null,
+          session: { _id: session._id, status: session.status, players: session.players },
+          eventBuffer: eventBuffers.get(sessionId) || [],
+        });
 
-        // Notify others
         socket.to(`session:${sessionId}`).emit('player-connected', {
           userId: socket.userId, displayName: socket.displayName,
         });
 
       } catch (err) {
-        logger.error('join-session error', { error: err.message });
-        socket.emit('action-error', { message: 'Ошибка подключения' });
+        console.error('join-session error:', err);
+        socket.emit('error', { message: 'Ошибка подключения' });
       }
     });
 
-    // ─── START GAME (host only) ───
-    socket.on('start-game', async (data) => {
+    // --- Rejoin (reconnect with event buffer) ---
+    socket.on('rejoin-session', async ({ sessionId }) => {
       try {
-        const { sessionId } = socket;
-        if (!sessionId) return;
-
         const session = await GameSession.findById(sessionId);
-        if (!session) return socket.emit('action-error', { message: 'Сессия не найдена' });
-        if (session.hostUserId?.toString() !== socket.userId) {
-          return socket.emit('action-error', { message: 'Только хост может начать' });
-        }
+        if (!session) return socket.emit('rejoin-error', { error: 'Сессия не найдена' });
 
-        const gameState = await GameEngine.initializeGame(session);
-        session.status = 'playing';
-        session.gameState = gameState;
-        await session.save();
-        activeGames.set(sessionId, gameState);
+        const isPlayer = session.players.some(p => p.userId?.toString() === socket.userId);
+        if (!isPlayer) return socket.emit('rejoin-error', { error: 'Вы не участник' });
 
-        gameNsp.to(`session:${sessionId}`).emit('game-started', { gameState });
+        socket.join(`session:${sessionId}`);
+        socket.sessionId = sessionId;
+
+        const player = session.players.find(p => p.userId?.toString() === socket.userId);
+        if (player) { player.connected = true; await session.save().catch(() => {}); }
+
+        const gs = activeGames.get(sessionId) || session.gameState;
+        socket.emit('game-snapshot', {
+          gameState: gs,
+          eventBuffer: eventBuffers.get(sessionId) || [],
+        });
+
+        socket.to(`session:${sessionId}`).emit('player-reconnected', {
+          userId: socket.userId, displayName: socket.displayName,
+        });
       } catch (err) {
-        logger.error('start-game error', { error: err.message });
-        socket.emit('action-error', { message: 'Ошибка запуска' });
+        socket.emit('rejoin-error', { error: 'Ошибка реконнекта' });
       }
     });
 
-    // ─── ACTION REQUEST ───
-    socket.on('action-request', async (data) => {
-      try {
-        const { sessionId } = socket;
-        if (!sessionId) return socket.emit('action-error', { message: 'Не в сессии' });
+    // --- Action request ---
+    socket.on('action-request', async ({ sessionId: reqSessionId, action }) => {
+      const sessionId = reqSessionId || socket.sessionId;
+      if (!sessionId) return socket.emit('action-error', { error: 'Не в сессии' });
 
-        // Get game state
-        let gameState = activeGames.get(sessionId);
-        if (!gameState || !gameState.heroes?.length) {
-          // Try to restore
+      try {
+        let gs = activeGames.get(sessionId);
+
+        // Try restore from DB
+        if (!gs || !gs.heroes?.length) {
           const session = await GameSession.findById(sessionId);
-          if (session?.gameState?.map && session.gameState.heroes?.length) {
-            gameState = session.gameState;
-            activeGames.set(sessionId, gameState);
+          if (session?.gameState?.heroes?.length) {
+            gs = session.gameState;
+            activeGames.set(sessionId, gs);
           } else if (session?.status === 'playing') {
-            try {
-              gameState = await GameEngine.initializeGame(session);
-              activeGames.set(sessionId, gameState);
-              session.gameState = gameState;
-              await session.save().catch(() => {});
-            } catch (err) {
-              return socket.emit('action-error', { message: 'Игра не инициализирована' });
-            }
+            gs = await GameEngine.initializeFromDB(session);
+            activeGames.set(sessionId, gs);
+            session.gameState = gs;
+            await session.save().catch(() => {});
           } else {
-            return socket.emit('action-error', { message: 'Нет состояния игры' });
+            return socket.emit('action-error', { error: 'Игра не найдена' });
           }
         }
 
-        // Process action through GameEngine
+        // Get or create engine
+        const session = await GameSession.findById(sessionId).lean();
+        const players = session?.players || [];
+        const engine = getOrCreateEngine(sessionId, gs, players);
+
+        // Validate action ownership
+        const userId = socket.userId;
+        const actionType = action.type;
+
+        // Process action through engine
         let result;
-        if (['interact', 'loot'].includes(data.type)) {
-          // These are async (loot generation from DB)
-          result = await GameEngine.processAction(gameState, data, socket.userId);
+        if (actionType === 'end-turn') {
+          result = engine.executeEndTurn();
         } else {
-          result = GameEngine.processAction(gameState, data, socket.userId);
+          // Validate
+          const validation = engine.validateAction(userId, action);
+          if (!validation.ok) {
+            return socket.emit('action-error', { error: validation.error });
+          }
+          result = engine.processAction(userId, action);
         }
 
-        if (result.error) {
-          return socket.emit('action-error', { message: result.error });
+        // Update state
+        activeGames.set(sessionId, engine.gs);
+
+        // Build event payload
+        const eventPayload = {
+          action: { type: actionType, heroId: action.heroId },
+          result,
+          gameState: engine.gs,
+          actionLog: engine.getActionLog(),
+        };
+
+        // Clear engine log
+        engine.actionLog = [];
+        engine.events = [];
+
+        bufferEvent(sessionId, eventPayload);
+        gameNsp.to(`session:${sessionId}`).emit('action-result', eventPayload);
+        debouncedSave(sessionId, engine.gs);
+
+        // Check if combat ended
+        if (result?.combatEnded) {
+          const summary = engine.generateMatchSummary(result.combatResult);
+          gameNsp.to(`session:${sessionId}`).emit('match-ended', {
+            result: result.combatResult,
+            summary,
+            gameState: engine.gs,
+          });
         }
-
-        // Update active games
-        if (result.gameState) {
-          activeGames.set(sessionId, result.gameState);
-        }
-
-        // Broadcast to all players in session
-        gameNsp.to(`session:${sessionId}`).emit('action-result', {
-          action: { type: data.type },
-          result: result.actionResult,
-          gameState: result.gameState,
-        });
-
-        // Debounced save to DB
-        debouncedSave(sessionId, result.gameState);
 
       } catch (err) {
-        logger.error('action-request error', { error: err.message, stack: err.stack?.split('\n')[1] });
-        socket.emit('action-error', { message: 'Ошибка: ' + err.message });
+        console.error('action-request error:', err.message);
+        socket.emit('action-error', { error: err.message || 'Ошибка обработки действия' });
       }
     });
 
-    // ─── CHAT MESSAGE ───
-    socket.on('chat-message', (data) => {
-      const { sessionId } = socket;
-      if (!sessionId || !data?.text) return;
+    // --- Init combat ---
+    socket.on('init-combat', async ({ sessionId: reqSessionId, aggroMonsterIds }) => {
+      const sessionId = reqSessionId || socket.sessionId;
+      if (!sessionId) return;
 
+      try {
+        const gs = activeGames.get(sessionId);
+        if (!gs) return;
+
+        const session = await GameSession.findById(sessionId).lean();
+        const engine = getOrCreateEngine(sessionId, gs, session?.players || []);
+        const result = engine.initCombat(aggroMonsterIds || []);
+
+        activeGames.set(sessionId, engine.gs);
+
+        const payload = {
+          action: { type: 'init-combat' },
+          result,
+          gameState: engine.gs,
+          actionLog: engine.getActionLog(),
+        };
+        engine.actionLog = [];
+
+        bufferEvent(sessionId, payload);
+        gameNsp.to(`session:${sessionId}`).emit('action-result', payload);
+        debouncedSave(sessionId, engine.gs);
+      } catch (err) {
+        console.error('init-combat error:', err);
+      }
+    });
+
+    // --- Start game (host) ---
+    socket.on('start-game', async ({ sessionId: reqSessionId }) => {
+      const sessionId = reqSessionId || socket.sessionId;
+      if (!sessionId) return;
+
+      try {
+        const session = await GameSession.findById(sessionId);
+        if (!session) return socket.emit('error', { message: 'Сессия не найдена' });
+        if (session.hostUserId?.toString() !== socket.userId) {
+          return socket.emit('error', { message: 'Только хост' });
+        }
+
+        const gs = await GameEngine.initializeFromDB(session);
+        session.status = 'playing';
+        session.gameState = gs;
+        await session.save();
+        activeGames.set(sessionId, gs);
+
+        gameNsp.to(`session:${sessionId}`).emit('game-started', { gameState: gs });
+      } catch (err) {
+        console.error('start-game error:', err);
+        socket.emit('error', { message: 'Ошибка запуска' });
+      }
+    });
+
+    // --- Save game ---
+    socket.on('save-game', async () => {
+      const sessionId = socket.sessionId;
+      if (!sessionId) return;
+      const gs = activeGames.get(sessionId);
+      if (gs) {
+        try {
+          await GameSession.findByIdAndUpdate(sessionId, { gameState: gs });
+          socket.emit('game-saved', { success: true, timestamp: new Date().toISOString() });
+        } catch (err) {
+          console.error('save-game error:', err);
+        }
+      }
+    });
+
+    // --- Chat ---
+    socket.on('chat-message', (data) => {
+      const sessionId = socket.sessionId;
+      if (!sessionId || !data?.text) return;
       const msg = {
         userId: socket.userId,
         displayName: socket.displayName,
         text: String(data.text).slice(0, 500),
         timestamp: new Date().toISOString(),
       };
-
       gameNsp.to(`session:${sessionId}`).emit('chat-message', msg);
     });
 
-    // ─── SAVE GAME ───
-    socket.on('save-game', async () => {
+    // --- AI narration request ---
+    socket.on('request-ai-narration', async ({ sessionId: reqSessionId, context }) => {
+      const sessionId = reqSessionId || socket.sessionId;
+      if (!sessionId) return;
       try {
-        const { sessionId } = socket;
-        if (!sessionId) return;
-
-        const gameState = activeGames.get(sessionId);
-        if (gameState) {
-          await GameSession.findByIdAndUpdate(sessionId, { gameState });
-          socket.emit('game-saved', { success: true, timestamp: new Date().toISOString() });
-        }
+        const aiMaster = require('../services/aiMaster');
+        const result = await aiMaster.generate(context);
+        gameNsp.to(`session:${sessionId}`).emit('ai-narration', {
+          type: context?.type || 'narration',
+          narration: result.narration || result.npcText || 'Приключение продолжается...',
+        });
       } catch (err) {
-        logger.error('save-game error', { error: err.message });
+        console.error('AI narration error:', err);
+        socket.emit('ai-narration', {
+          type: context?.type || 'narration',
+          narration: 'Приключение продолжается...',
+          error: true,
+        });
       }
     });
 
-    // ─── DISCONNECT ───
-    socket.on('disconnect', async () => {
-      try {
-        if (socket.sessionId) {
-          const session = await GameSession.findById(socket.sessionId);
+    // --- Disconnect ---
+    socket.on('disconnect', async (reason) => {
+      console.log(`🔌 Game disconnect: ${socket.displayName} (${reason})`);
+
+      if (socket.sessionId) {
+        const sessionId = socket.sessionId;
+
+        try {
+          const session = await GameSession.findById(sessionId);
           if (session) {
             const player = session.players.find(p => p.userId?.toString() === socket.userId);
-            if (player) {
-              player.connected = false;
-              await session.save().catch(() => {});
+            if (player) { player.connected = false; await session.save().catch(() => {}); }
+          }
+        } catch (err) {
+          console.error('disconnect DB error:', err);
+        }
+
+        socket.to(`session:${sessionId}`).emit('player-disconnected', {
+          userId: socket.userId, displayName: socket.displayName, reason,
+        });
+
+        // Auto-advance if this player's turn
+        try {
+          const gs = activeGames.get(sessionId);
+          if (gs && gs.mode !== 'combat') {
+            const currentHero = gs.heroes?.[gs.activeHeroIdx || 0];
+            if (currentHero && currentHero._ownerId === socket.userId) {
+              await advanceExploreTurn(sessionId, gameNsp, 'disconnect', null);
             }
           }
-
-          socket.to(`session:${socket.sessionId}`).emit('player-disconnected', {
-            userId: socket.userId, displayName: socket.displayName,
-          });
+        } catch (err) {
+          console.error('Auto-advance error:', err);
         }
-      } catch (err) {
-        logger.error('disconnect error', { error: err.message });
       }
     });
   });
 }
 
-// Save to DB every 5 seconds (debounced)
-function debouncedSave(sessionId, gameState) {
-  if (saveTimers.has(sessionId)) clearTimeout(saveTimers.get(sessionId));
-  saveTimers.set(sessionId, setTimeout(async () => {
-    try {
-      await GameSession.findByIdAndUpdate(sessionId, { gameState });
-      saveTimers.delete(sessionId);
-    } catch (err) {
-      logger.error('debouncedSave error', { error: err.message });
-    }
-  }, 5000));
-}
+// Export
+setupGameHandler.activeGames = activeGames;
+setupGameHandler.eventBuffers = eventBuffers;
+setupGameHandler.advanceExploreTurn = advanceExploreTurn;
 
 module.exports = { setupGameHandler, activeGames };
