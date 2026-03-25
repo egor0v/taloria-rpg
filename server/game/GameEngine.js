@@ -1358,8 +1358,6 @@ class GameEngine {
   }
 
   getEffectiveMoveRange(entity) {
-    const terrain = this.gs.terrain && this.gs.terrain[entity.row] && this.gs.terrain[entity.row][entity.col];
-    const onRoad = terrain === 'road';
     let baseRange = entity.moveRange || BASE_MOVE_RANGE;
 
     // Status reductions (frozen, slowed)
@@ -1373,7 +1371,7 @@ class GameEngine {
     // Rooted — no movement
     if (hasModifier(entity, 'blockMovement')) return 0;
 
-    return onRoad ? baseRange : Math.min(baseRange, OFFROAD_MOVE_RANGE);
+    return baseRange;
   }
 
   getReachableCells(startR, startC, range, excludeId) {
@@ -1391,8 +1389,7 @@ class GameEngine {
       if (cost > (bestCost[key(row, col)] ?? Infinity)) continue;
 
       if (cost > 0 && !this.isCellOccupied(row, col, excludeId)) {
-        const terrain = this.gs.terrain && this.gs.terrain[row] && this.gs.terrain[row][col];
-        reachable.push({ row, col, offRoad: terrain !== 'road', cost });
+        reachable.push({ row, col, cost });
       }
       if (cost >= range) continue;
 
@@ -1404,7 +1401,10 @@ class GameEngine {
         if (this.gs.map[nr][nc] === 'wall') continue;
         if (this.hasBlockingObject(nr, nc)) continue;
 
-        const newCost = cost + 1;
+        // Obstacle cells cost 2 steps
+        const cellType = this.gs.map[nr][nc];
+        const stepCost = (cellType === 'obstacle') ? 2 : 1;
+        const newCost = cost + stepCost;
         if (newCost > range) continue;
 
         const k = key(nr, nc);

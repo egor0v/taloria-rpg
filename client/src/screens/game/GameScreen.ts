@@ -281,10 +281,9 @@ function renderMap() {
       // Server uses row/col; row=y, col=x
       const hero = heroes?.find((h: any) => h.alive !== false && h.hp > 0 && (h.col === x && h.row === y));
       const monster = monsters?.find((m: any) => m.alive && (m.col === x && m.row === y));
-      const showMonster = monster && (monster.discovered || fogV === 2);
+      const showMonster = monster && !monster.friendly && (monster.discovered || fogV === 2);
+      const friendlyNpc = !hero ? monsters?.find((n: any) => n.friendly && n.alive && n.col === x && n.row === y && (n.discovered || fogV === 2)) : null;
       const obj = objects?.find((o: any) => (o.col === x && o.row === y) && (o.discovered !== false) && !o.opened && !o.triggered);
-      // Friendly NPCs are stored in monsters array with friendly=true
-      const friendlyNpc = !hero && !showMonster ? monsters?.find((n: any) => n.friendly && n.alive && n.col === x && n.row === y) : null;
 
       let cls = 'map-cell';
       if (isWall) cls += ' cell-wall';
@@ -300,9 +299,15 @@ function renderMap() {
       }
 
       // Highlights
-      if (myHero && actionMode === 'move' && !isWall && fogV > 0) {
-        const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
-        if (dist > 0 && dist <= (myHero.stepsRemaining || 0) && !hero && !showMonster) cls += ' cell-reachable';
+      if (myHero && actionMode === 'move' && !isWall && fogV > 0 && !hero && !showMonster) {
+        // Use server-computed reachable cells if available
+        const reachable = gs.reachableCells;
+        if (reachable && reachable.length > 0) {
+          if (reachable.some((c: any) => c.row === y && c.col === x)) cls += ' cell-reachable';
+        } else {
+          const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
+          if (dist > 0 && dist <= (myHero.stepsRemaining || myHero.moveRange || 2)) cls += ' cell-reachable';
+        }
       }
       if (myHero && actionMode === 'attack' && showMonster) {
         const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
@@ -318,14 +323,14 @@ function renderMap() {
           <img src="${portrait}" class="token-img" alt="" onerror="this.style.display='none';this.parentElement.textContent='🧙'" />
           <span class="token-hp-bar" style="width:${Math.round(hero.hp / hero.maxHp * 100)}%"></span>
         </div>`;
-      } else if (showMonster && !monster.friendly) {
+      } else if (showMonster) {
         content = `<div class="token token-monster" title="${monster.name} HP:${monster.hp}/${monster.maxHp}">
           ${monster.tokenImg ? `<img src="${monster.tokenImg}" class="token-img" alt="" />` : '👹'}
           <span class="token-hp-bar token-hp-monster" style="width:${Math.round(monster.hp / monster.maxHp * 100)}%"></span>
         </div>`;
-      } else if (friendlyNpc && fogV >= 2) {
+      } else if (friendlyNpc) {
         content = `<span class="token-object token-npc" title="${friendlyNpc.name}">${friendlyNpc.label || '🧝'}</span>`;
-      } else if (obj && fogV >= 2) {
+      } else if (obj && fogV > 0) {
         const icons: Record<string, string> = { chest: '📦', trap: '⚡', rune: '🔮', questNpc: '❗' };
         content = `<span class="token-object" title="${obj.name || obj.type}">${icons[obj.type] || '❓'}</span>`;
       }
