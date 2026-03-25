@@ -798,7 +798,8 @@ function openEditModal(apiUrl: string, fields: FieldDef[], item: any | null, tit
             return `<div class="form-group">
               <label>${f.label}</label>
               <div class="grid-editor-controls">
-                <label>Ширина: <input type="number" class="grid-width-input" data-grid="${f.key}" value="${w}" min="5" max="50" style="width:60px" /></label>
+                <label>Ширина: <input type="number" class="grid-width-input" data-grid="${f.key}" value="${w}" min="5" max="80" style="width:60px" /></label>
+                <label>Высота: <input type="number" class="grid-height-input" data-grid="${f.key}" value="${h}" min="5" max="80" style="width:60px" /></label>
                 <span class="grid-size-info" id="grid-info-${f.key}">${w}×${h} клеток</span>
                 <span class="grid-brush-label">Кисть:</span>
                 ${cellTypes.map((ct, i) => `<button type="button" class="grid-brush-btn ${i === 0 ? 'active' : ''}" data-grid="${f.key}" data-val="${ct.v}" style="background:${ct.color}" title="${ct.label}">${ct.label}</button>`).join('')}
@@ -1110,10 +1111,15 @@ function initGridEditors(modal: HTMLElement, item: any | null) {
       (canvasEl as HTMLElement).style.opacity = String(cellOpacity);
     });
 
-    // Render grid
+    // Render grid — cellSize computed to fit container exactly
     function renderGrid() {
       const el = canvasEl as HTMLElement;
-      const cellSize = 22;
+      const wrapWidth = wrapEl?.clientWidth || 600;
+      const wrapHeight = 500; // max-height of wrap
+      const gapPx = 1;
+      const maxCellW = Math.floor((wrapWidth - gapPx * (width - 1)) / width);
+      const maxCellH = Math.floor((wrapHeight - gapPx * (height - 1)) / height);
+      const cellSize = Math.max(8, Math.min(40, maxCellW, maxCellH));
       el.style.gridTemplateColumns = `repeat(${width}, ${cellSize}px)`;
       el.style.opacity = String(cellOpacity);
       el.innerHTML = '';
@@ -1159,14 +1165,16 @@ function initGridEditors(modal: HTMLElement, item: any | null) {
       });
     });
 
-    // Width change → resize grid, auto-calculate height
-    widthInput?.addEventListener('change', () => {
-      const newWidth = Math.max(5, Math.min(50, parseInt(widthInput.value) || 15));
-      width = newWidth;
-      height = Math.max(5, Math.ceil(width * 0.75)); // 4:3 aspect ratio
+    // Width/Height change → resize grid
+    const heightInput = modal.querySelector(`.grid-height-input[data-grid="${fieldKey}"]`) as HTMLInputElement;
+    const resizeGrid = () => {
+      width = Math.max(5, Math.min(80, parseInt(widthInput?.value || '15') || 15));
+      height = Math.max(5, Math.min(80, parseInt(heightInput?.value || String(height)) || height));
       gridData = buildGrid(width, height, gridData);
       renderGrid();
-    });
+    };
+    widthInput?.addEventListener('change', resizeGrid);
+    heightInput?.addEventListener('change', resizeGrid);
 
     renderGrid();
   });
@@ -1386,7 +1394,12 @@ function initScenarioMapEditor(modal: HTMLElement, item: any | null, fields: Fie
   (window as any)._loadScenarioMap = loadMapForScenario;
 
   function renderScenarioGrid() {
-    const cellSize = 24;
+    const wrapWidth = wrapEl?.clientWidth || 700;
+    const wrapMaxH = 500;
+    const gapPx = 1;
+    const maxCellW = Math.floor((wrapWidth - gapPx * (mapWidth - 1)) / mapWidth);
+    const maxCellH = Math.floor((wrapMaxH - gapPx * (mapHeight - 1)) / mapHeight);
+    const cellSize = Math.max(8, Math.min(40, maxCellW, maxCellH));
     gridEl.style.gridTemplateColumns = `repeat(${mapWidth}, ${cellSize}px)`;
     gridEl.style.opacity = '0.7';
     gridEl.innerHTML = '';
