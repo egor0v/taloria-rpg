@@ -36,6 +36,14 @@ function updateNav() {
     if (wallet) wallet.textContent = new Intl.NumberFormat('ru').format(user.walletSilver || 0);
     if (avatar) avatar.textContent = (user.displayName || 'U').charAt(0).toUpperCase();
   }
+
+  // Highlight active nav item
+  const path = window.location.pathname;
+  topNav.querySelectorAll('.nav-item').forEach(el => {
+    const href = el.getAttribute('href') || '';
+    const isActive = (href === path) || (href !== '/' && path.startsWith(href));
+    el.classList.toggle('nav-item--active', isActive);
+  });
 }
 
 function requireAuth(): boolean {
