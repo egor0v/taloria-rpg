@@ -68,21 +68,35 @@
 .city-loc-icon-wrap:has(.city-loc-img) {
   width: 84px;
   height: 84px;
-  background: transparent;
-  border: none;
-  border-radius: 0;
+  background: rgba(10, 13, 18, 0.75);
+  border: 2px solid rgba(201, 162, 78, 0.4);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   transition: all 0.2s;
 }
 
 .city-loc:hover .city-loc-icon-wrap:not(:has(.city-loc-img)) {
   border-color: var(--gold);
-  transform: scale(1.1);
-  filter: drop-shadow(0 0 12px rgba(201, 162, 78, 0.4));
+  border-color: var(--gold);
+  background: rgba(10, 13, 18, 0.9);
+  box-shadow: 0 0 20px rgba(201, 162, 78, 0.4), 0 4px 16px rgba(0, 0, 0, 0.5);
+  transform: scale(1.08);
 }
 
+.city-loc:hover .city-loc-icon-wrap {
+  border-color: var(--gold);
+  background: rgba(10, 13, 18, 0.9);
+  box-shadow: 0 0 20px rgba(201, 162, 78, 0.4), 0 4px 16px rgba(0, 0, 0, 0.5);
+  transform: scale(1.08);
+}
+.city-loc:hover .city-loc-img {
+  filter: drop-shadow(0 0 10px rgba(246, 200, 109, 0.5)) brightness(1.15);
+  transform: scale(1.05);
+}
 .city-loc-icon {
   font-size: 1.3rem;
 }
