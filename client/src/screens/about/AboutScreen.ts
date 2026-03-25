@@ -193,7 +193,7 @@ export function renderAbout(container: HTMLElement): void {
   .lp { background: var(--bg, #0b0f15); color: var(--text, #e8e6e0); }
 
   /* ── Hero Banner ── */
-  .lp-hero { position: relative; padding: 100px 24px 80px; text-align: center; overflow: hidden; min-height: 420px; display: flex; align-items: center; justify-content: center; }
+  .lp-hero { position: relative; padding: 100px 24px 80px; text-align: center; overflow: hidden; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
   .lp-hero-img { position: absolute; inset: 0; background-size: cover; background-position: center 30%; z-index: 0; }
   .lp-hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(11,15,21,0.3) 0%, rgba(11,15,21,0.6) 50%, rgba(11,15,21,0.95) 100%); z-index: 1; }
   .lp-hero-inner { position: relative; z-index: 2; }
