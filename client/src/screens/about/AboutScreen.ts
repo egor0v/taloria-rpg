@@ -17,9 +17,10 @@ export function renderAbout(container: HTMLElement): void {
   container.innerHTML = `
   <div class="lp">
 
-    <!-- ═══ HERO ═══ -->
+    <!-- ═══ HERO BANNER ═══ -->
     <section class="lp-hero">
-      <div class="lp-hero-glow"></div>
+      <div class="lp-hero-img" style="background-image: url('/hero-banner.jpg')"></div>
+      <div class="lp-hero-overlay"></div>
       <div class="lp-hero-inner">
         <img src="/logo.png" alt="Taloria" class="lp-logo" />
         <h1 class="lp-brand">TALORIA</h1>
@@ -191,12 +192,13 @@ export function renderAbout(container: HTMLElement): void {
   <style>
   .lp { background: var(--bg, #0b0f15); color: var(--text, #e8e6e0); }
 
-  /* ── Hero ── */
-  .lp-hero { position: relative; padding: 80px 24px 50px; text-align: center; overflow: hidden; }
-  .lp-hero-glow { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, rgba(201,162,78,0.07), transparent 60%), radial-gradient(ellipse at 30% 90%, rgba(91,143,255,0.05), transparent 50%); pointer-events: none; }
-  .lp-hero-inner { position: relative; z-index: 1; }
+  /* ── Hero Banner ── */
+  .lp-hero { position: relative; padding: 100px 24px 80px; text-align: center; overflow: hidden; min-height: 420px; display: flex; align-items: center; justify-content: center; }
+  .lp-hero-img { position: absolute; inset: 0; background-size: cover; background-position: center 30%; z-index: 0; }
+  .lp-hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(11,15,21,0.3) 0%, rgba(11,15,21,0.6) 50%, rgba(11,15,21,0.95) 100%); z-index: 1; }
+  .lp-hero-inner { position: relative; z-index: 2; }
   .lp-logo { width: 110px; height: 110px; object-fit: contain; filter: drop-shadow(0 4px 24px rgba(201,162,78,0.35)); margin-bottom: 12px; }
-  .lp-brand { font-family: var(--font-heading, 'Cinzel', serif); font-size: 3.8rem; font-weight: 900; color: var(--gold, #f6c86d); letter-spacing: 0.18em; margin: 0; text-shadow: 0 2px 30px rgba(201,162,78,0.25); }
+  .lp-brand { font-family: var(--font-heading, 'Cinzel', serif); font-size: 4.2rem; font-weight: 900; color: var(--gold, #f6c86d); letter-spacing: 0.18em; margin: 0; text-shadow: 0 2px 30px rgba(201,162,78,0.4), 0 4px 60px rgba(0,0,0,0.5); }
   .lp-divider { text-align: center; margin: 14px 0; display: flex; align-items: center; justify-content: center; gap: 16px; }
   .lp-divider::before, .lp-divider::after { content: ''; flex: 1; max-width: 200px; height: 1px; background: linear-gradient(90deg, transparent, rgba(201,162,78,0.3), transparent); }
   .lp-rune { color: var(--gold); font-size: 0.7rem; }
