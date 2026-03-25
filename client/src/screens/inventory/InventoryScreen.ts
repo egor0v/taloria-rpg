@@ -397,10 +397,10 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
 
       <!-- Stash -->
       <div class="inv-stash-section">
-        <h4 class="inv-section-title">СУНДУК <span class="inv-stash-slots">${(hero.stashRows || 2) * 9 + (hero.stashExtraSlots || 0)} слотов</span></h4>
+        <h4 class="inv-section-title">СУНДУК <span class="inv-stash-slots">${(hero.stashRows || 2) * 10 + (hero.stashExtraSlots || 0)} слотов</span></h4>
         <p class="inv-stash-hint">В сундук вы можете положить предметы, которые могут понадобиться вам позже</p>
         <div class="inv-grid inv-stash-grid">
-          ${renderInventoryGrid(stash, (hero.stashRows || 2) * 9 + (hero.stashExtraSlots || 0), 'stash')}
+          ${renderInventoryGrid(stash, (hero.stashRows || 2) * 10 + (hero.stashExtraSlots || 0), 'stash')}
         </div>
         <div class="inv-stash-buy">
           <button class="inv-stash-buy-btn" id="btn-buy-stash-5">📦 +5 слотов <span class="inv-stash-price">99 ₽</span></button>

@@ -200,13 +200,16 @@ export function renderAbout(container: HTMLElement): void {
   .lp-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(201,162,78,0.35); }
   .lp-cta--outline { background: transparent; color: var(--gold); border: 1px solid rgba(201,162,78,0.4); box-shadow: none; }
   .lp-cta--outline:hover { background: rgba(201,162,78,0.08); border-color: var(--gold); box-shadow: 0 4px 20px rgba(201,162,78,0.15); }
-  /* Gameplay image with heavy smoke/fog blurred edges */
-  .lp-gameplay-img-wrap { position: relative; overflow: visible; }
+  /* Gameplay image — matches text height, zoomed center, heavy smoke edges, bleeds under text */
+  .lp-worlds-grid { position: relative; }
+  .lp-worlds-visual { position: absolute; right: -40px; top: 0; bottom: 0; width: 55%; z-index: 0; overflow: hidden; pointer-events: none; }
+  .lp-worlds-text { position: relative; z-index: 1; }
+  .lp-gameplay-img-wrap { position: absolute; inset: -30px; }
   .lp-gameplay-img-wrap::after {
-    content: ''; position: absolute; inset: -20px; z-index: 1; pointer-events: none;
-    background: radial-gradient(ellipse at center, transparent 25%, rgba(11,15,21,0.4) 45%, rgba(11,15,21,0.75) 65%, rgba(11,15,21,0.95) 80%, rgba(11,15,21,1) 100%);
+    content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at 60% 50%, transparent 15%, rgba(11,15,21,0.3) 30%, rgba(11,15,21,0.7) 55%, rgba(11,15,21,0.95) 75%, rgba(11,15,21,1) 100%);
   }
-  .lp-gameplay-img { width: 100%; height: auto; display: block; border-radius: 16px; filter: saturate(1.1) contrast(1.05); }
+  .lp-gameplay-img { width: 100%; height: 100%; object-fit: cover; object-position: center; filter: saturate(1.15) contrast(1.05); }
 
   .lp-card-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
   .lp-vcard { background: rgba(16,20,30,0.7); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 16px; text-align: center; transition: border-color 0.2s, transform 0.2s; display: flex; align-items: center; gap: 8px; }

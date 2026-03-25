@@ -428,8 +428,15 @@
 }
 
 .inv-stash-grid {
-  grid-template-columns: repeat(9, 1fr);
+  grid-template-columns: repeat(10, 1fr);
+  max-height: calc(var(--cell-size, 48px) * 5 + 4 * 4px + 8px); /* 5 rows visible */
+  overflow-y: auto;
+  padding-right: 4px;
 }
+.inv-stash-grid::-webkit-scrollbar { width: 4px; }
+.inv-stash-grid::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 2px; }
+.inv-stash-grid::-webkit-scrollbar-thumb { background: rgba(201,162,78,0.2); border-radius: 2px; }
+.inv-stash-grid::-webkit-scrollbar-thumb:hover { background: rgba(201,162,78,0.4); }
 
 .inv-stash-slots { font-size: 0.65rem; color: var(--text-muted); font-weight: 400; margin-left: 6px; }
 
