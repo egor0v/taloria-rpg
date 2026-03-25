@@ -43,27 +43,8 @@ export function renderAbout(container: HTMLElement): void {
             </div>
           </div>
           <div class="lp-worlds-visual">
-            <div class="lp-card-stack">
-              <div class="lp-vcard lp-vcard--1">
-                <div class="lp-vcard-icon">⚔️</div>
-                <div class="lp-vcard-title">3 расы</div>
-                <div class="lp-vcard-desc">Человек · Эльф · Дварф</div>
-              </div>
-              <div class="lp-vcard lp-vcard--2">
-                <div class="lp-vcard-icon">🧙</div>
-                <div class="lp-vcard-title">4 класса</div>
-                <div class="lp-vcard-desc">Воин · Маг · Жрец · Бард</div>
-              </div>
-              <div class="lp-vcard lp-vcard--3">
-                <div class="lp-vcard-icon">🎲</div>
-                <div class="lp-vcard-title">5 кубиков</div>
-                <div class="lp-vcard-desc">d4 · d6 · d8 · d10 · d20</div>
-              </div>
-              <div class="lp-vcard lp-vcard--4">
-                <div class="lp-vcard-icon">🤖</div>
-                <div class="lp-vcard-title">AI-ведущий</div>
-                <div class="lp-vcard-desc">Уникальные нарративы каждый раз</div>
-              </div>
+            <div class="lp-gameplay-img-wrap">
+              <img src="/gameplay-d20.jpg" alt="Настольная RPG" class="lp-gameplay-img" />
             </div>
           </div>
         </div>
@@ -193,7 +174,7 @@ export function renderAbout(container: HTMLElement): void {
 
   /* ── Hero Banner ── */
   .lp-hero { position: relative; padding: 100px 24px 80px; text-align: center; overflow: hidden; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-  .lp-hero-img { position: absolute; inset: 0; background-size: cover; background-position: center 30%; z-index: 0; }
+  .lp-hero-img { position: absolute; inset: 0; background-size: cover; background-position: center 30%; background-attachment: fixed; z-index: 0; }
   .lp-hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(11,15,21,0.3) 0%, rgba(11,15,21,0.6) 50%, rgba(11,15,21,0.95) 100%); z-index: 1; }
   .lp-hero-inner { position: relative; z-index: 2; }
   .lp-logo { width: 110px; height: 110px; object-fit: contain; filter: drop-shadow(0 4px 24px rgba(201,162,78,0.35)); margin-bottom: 12px; }
@@ -218,11 +199,19 @@ export function renderAbout(container: HTMLElement): void {
   .lp-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(201,162,78,0.35); }
   .lp-cta--outline { background: transparent; color: var(--gold); border: 1px solid rgba(201,162,78,0.4); box-shadow: none; }
   .lp-cta--outline:hover { background: rgba(201,162,78,0.08); border-color: var(--gold); box-shadow: 0 4px 20px rgba(201,162,78,0.15); }
-  .lp-card-stack { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .lp-vcard { background: rgba(16,20,30,0.7); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 20px 16px; text-align: center; transition: border-color 0.2s, transform 0.2s; }
+  /* Gameplay image with heavy smoke/fog blurred edges */
+  .lp-gameplay-img-wrap { position: relative; overflow: visible; }
+  .lp-gameplay-img-wrap::after {
+    content: ''; position: absolute; inset: -20px; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 25%, rgba(11,15,21,0.4) 45%, rgba(11,15,21,0.75) 65%, rgba(11,15,21,0.95) 80%, rgba(11,15,21,1) 100%);
+  }
+  .lp-gameplay-img { width: 100%; height: auto; display: block; border-radius: 16px; filter: saturate(1.1) contrast(1.05); }
+
+  .lp-card-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .lp-vcard { background: rgba(16,20,30,0.7); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 16px; text-align: center; transition: border-color 0.2s, transform 0.2s; display: flex; align-items: center; gap: 8px; }
   .lp-vcard:hover { border-color: rgba(201,162,78,0.25); transform: translateY(-2px); }
-  .lp-vcard-icon { font-size: 1.8rem; margin-bottom: 8px; }
-  .lp-vcard-title { font-family: var(--font-heading); font-size: 0.9rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .lp-vcard-icon { font-size: 1.2rem; }
+  .lp-vcard-title { font-family: var(--font-heading); font-size: 0.8rem; font-weight: 700; color: var(--text); }
   .lp-vcard-desc { font-size: 0.7rem; color: var(--text-dim); }
 
   /* ── How ── */
