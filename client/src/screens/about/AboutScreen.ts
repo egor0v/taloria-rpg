@@ -19,7 +19,7 @@ export function renderAbout(container: HTMLElement): void {
 
     <!-- ═══ HERO BANNER ═══ -->
     <section class="lp-hero">
-      <div class="lp-hero-img" style="background-image: url('/hero-banner.jpg')"></div>
+      <div class="lp-hero-img" style="background-image: url('/hero-banner.png')"></div>
       <div class="lp-hero-overlay"></div>
       <div class="lp-hero-inner">
         <img src="/logo.png" alt="Taloria" class="lp-logo" />
