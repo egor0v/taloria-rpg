@@ -42,7 +42,17 @@ async function render() {
     <div class="best">
       <!-- Header -->
       <header class="best-header">
-        <a href="/" class="best-logo">Taloria</a>
+        <div class="best-nav-left">
+          <a href="/" class="best-logo">Taloria</a>
+          <nav class="best-nav-links">
+            <a href="/about" class="best-nav-item">ГЛАВНАЯ</a>
+            <a href="/dashboard" class="best-nav-item">ПЕРСОНАЖИ</a>
+            <a href="/inventory" class="best-nav-item">ИНВЕНТАРЬ</a>
+            <a href="/city" class="best-nav-item">ГОРОД</a>
+            <a href="/lavka.html" class="best-nav-item">ЛАВКА</a>
+            <a href="/bestiary.html" class="best-nav-item best-nav-item--active">БЕСТИАРИЙ</a>
+          </nav>
+        </div>
         <a href="/" class="best-back">← В игру</a>
       </header>
 
@@ -248,8 +258,14 @@ function addBestiaryStyles() {
     .best { background: var(--bg); min-height: 100vh; color: var(--text); }
 
     /* Header */
-    .best-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: rgba(11,13,18,0.97); border-bottom: 1px solid var(--panel-border); }
-    .best-logo { font-family: var(--font-heading); font-size: 1.3rem; font-weight: 700; color: #d4a84b; text-decoration: none; letter-spacing: 0.12em; }
+    .best-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 24px; background: rgba(11,13,18,0.97); border-bottom: 1px solid var(--panel-border); position: sticky; top: 0; z-index: 50; }
+    .best-nav-left { display: flex; align-items: center; gap: 8px; }
+    .best-logo { font-family: var(--font-heading); font-size: 1.3rem; font-weight: 700; color: #d4a84b; text-decoration: none; letter-spacing: 0.12em; margin-right: 12px; }
+    .best-nav-links { display: flex; gap: 0; }
+    .best-nav-item { color: rgba(180,175,165,0.55); text-decoration: none; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; padding: 14px 12px; position: relative; transition: color 0.2s; }
+    .best-nav-item:hover { color: var(--text); }
+    .best-nav-item--active { color: var(--text); }
+    .best-nav-item--active::after { content: ''; position: absolute; bottom: 0; left: 12px; right: 12px; height: 2px; background: #3acc60; border-radius: 1px; }
     .best-back { color: var(--text-dim); font-size: 0.82rem; text-decoration: none; }
     .best-back:hover { color: var(--text); }
 

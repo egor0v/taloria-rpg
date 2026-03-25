@@ -36,8 +36,17 @@ async function render() {
     <div class="lavka">
       <!-- Header -->
       <header class="lavka-header">
-        <a href="/" class="lavka-logo">Taloria</a>
-        <a href="/" class="lavka-back">← В игру</a>
+        <div class="lavka-nav-left">
+          <a href="/" class="lavka-logo">Taloria</a>
+          <nav class="lavka-nav-links">
+            <a href="/about" class="lavka-nav-item">ГЛАВНАЯ</a>
+            <a href="/dashboard" class="lavka-nav-item">ПЕРСОНАЖИ</a>
+            <a href="/inventory" class="lavka-nav-item">ИНВЕНТАРЬ</a>
+            <a href="/city" class="lavka-nav-item">ГОРОД</a>
+            <a href="/lavka.html" class="lavka-nav-item lavka-nav-item--active">ЛАВКА</a>
+            <a href="/bestiary.html" class="lavka-nav-item">БЕСТИАРИЙ</a>
+          </nav>
+        </div>
         <div class="lavka-header-right">
           <span class="lavka-wallet">Ⓖ ${wallet.gold || 0}</span>
           <span class="lavka-wallet">Ⓢ ${wallet.silver || 0}</span>
@@ -303,8 +312,14 @@ function addLavkaStyles() {
     .lavka { background: var(--bg); min-height: 100vh; color: var(--text); }
 
     /* Header */
-    .lavka-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: rgba(11,13,18,0.97); border-bottom: 1px solid var(--panel-border); position: sticky; top: 0; z-index: 50; }
-    .lavka-logo { font-family: var(--font-heading); font-size: 1.3rem; font-weight: 700; color: #d4a84b; text-decoration: none; letter-spacing: 0.12em; }
+    .lavka-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 24px; background: rgba(11,13,18,0.97); border-bottom: 1px solid var(--panel-border); position: sticky; top: 0; z-index: 50; }
+    .lavka-nav-left { display: flex; align-items: center; gap: 8px; }
+    .lavka-logo { font-family: var(--font-heading); font-size: 1.3rem; font-weight: 700; color: #d4a84b; text-decoration: none; letter-spacing: 0.12em; margin-right: 12px; }
+    .lavka-nav-links { display: flex; gap: 0; }
+    .lavka-nav-item { color: rgba(180,175,165,0.55); text-decoration: none; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; padding: 14px 12px; position: relative; transition: color 0.2s; }
+    .lavka-nav-item:hover { color: var(--text); }
+    .lavka-nav-item--active { color: var(--text); }
+    .lavka-nav-item--active::after { content: ''; position: absolute; bottom: 0; left: 12px; right: 12px; height: 2px; background: #3acc60; border-radius: 1px; }
     .lavka-back { color: var(--text-dim); font-size: 0.82rem; text-decoration: none; transition: color 0.2s; }
     .lavka-back:hover { color: var(--text); }
     .lavka-header-right { display: flex; align-items: center; gap: 12px; }
