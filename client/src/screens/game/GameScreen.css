@@ -96,9 +96,11 @@
 .cell-fire { background: transparent; }
 .cell-wall { background: transparent; cursor: default; pointer-events: none; }
 .cell-floor:hover, .cell-obstacle:hover, .cell-water:hover, .cell-fire:hover { background: rgba(246,200,109,0.12); box-shadow: inset 0 0 6px rgba(246,200,109,0.1); }
-.cell-reachable { background: rgba(58,204,96,0.12) !important; box-shadow: inset 0 0 8px rgba(58,204,96,0.15); border: 1px solid rgba(58,204,96,0.2); }
-.cell-reachable:hover { background: rgba(58,204,96,0.25) !important; }
-.cell-attackable { background: rgba(255,77,77,0.12) !important; box-shadow: inset 0 0 8px rgba(255,77,77,0.15); }
+.cell-reachable { background: rgba(58,204,96,0.15) !important; box-shadow: inset 0 0 8px rgba(58,204,96,0.18); border: 1px solid rgba(58,204,96,0.25); }
+.cell-reachable:hover { background: rgba(58,204,96,0.3) !important; }
+.cell-reachable-obstacle { background: rgba(230,190,50,0.15) !important; box-shadow: inset 0 0 8px rgba(230,190,50,0.18); border: 1px solid rgba(230,190,50,0.25); }
+.cell-reachable-obstacle:hover { background: rgba(230,190,50,0.3) !important; }
+.cell-attackable { background: rgba(255,77,77,0.15) !important; box-shadow: inset 0 0 8px rgba(255,77,77,0.18); }
 
 /* Fog of war — must cover the parent's background image */
 .fog-hidden { background: #0a0806 !important; cursor: default; pointer-events: none; }

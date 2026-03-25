@@ -300,13 +300,16 @@ function renderMap() {
 
       // Highlights
       if (myHero && actionMode === 'move' && !isWall && fogV > 0 && !hero && !showMonster) {
-        // Use server-computed reachable cells if available
         const reachable = gs.reachableCells;
         if (reachable && reachable.length > 0) {
-          if (reachable.some((c: any) => c.row === y && c.col === x)) cls += ' cell-reachable';
+          if (reachable.some((c: any) => c.row === y && c.col === x)) {
+            cls += isObstacle ? ' cell-reachable-obstacle' : ' cell-reachable';
+          }
         } else {
           const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
-          if (dist > 0 && dist <= (myHero.stepsRemaining || myHero.moveRange || 2)) cls += ' cell-reachable';
+          if (dist > 0 && dist <= (myHero.stepsRemaining || myHero.moveRange || 2)) {
+            cls += isObstacle ? ' cell-reachable-obstacle' : ' cell-reachable';
+          }
         }
       }
       if (myHero && actionMode === 'attack' && showMonster) {
