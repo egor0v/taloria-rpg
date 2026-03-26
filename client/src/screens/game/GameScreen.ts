@@ -868,7 +868,17 @@ async function loadAbilityDefs() {
   if (Object.keys(abilityDefsCache).length > 0) return;
   try {
     const data = await apiCall('/api/bestiary?tab=abilities&limit=500');
-    (data.data || []).forEach((a: any) => { abilityDefsCache[a.abilityId] = a; });
+    (data.data || []).forEach((a: any) => {
+      // Normalize field names from API
+      abilityDefsCache[a.abilityId] = {
+        ...a,
+        name: a.name || a.abilityId,
+        description: a.description || a.desc || '',
+        manaCost: a.manaCost ?? a.mpCost ?? 0,
+        cooldown: a.cooldown ?? a.cd ?? 0,
+        range: a.range ?? 0,
+      };
+    });
   } catch {}
 }
 
@@ -882,12 +892,12 @@ async function showAbilityPopup() {
 
   // Hero abilities are arrays of abilityId strings
   const abilityIds = [...(hero.abilities || []), ...(hero.learnedAbilities || [])];
-  // Deduplicate
   const uniqueIds = [...new Set(abilityIds)];
-  // Filter out passives — only show active abilities
+  // Only show abilities that exist in cache AND are not passives/base abilities
   const activeAbilities = uniqueIds
-    .map(id => abilityDefsCache[id] || { abilityId: id, name: id, description: '', manaCost: 0 })
-    .filter(a => a.type !== 'passive');
+    .filter(id => abilityDefsCache[id] && !id.startsWith('passive_') && !id.startsWith('base_'))
+    .map(id => abilityDefsCache[id])
+    .filter(a => a.type !== 'passive' && a.type !== 'focus');
 
   const cooldowns = hero.cooldowns || {};
 
