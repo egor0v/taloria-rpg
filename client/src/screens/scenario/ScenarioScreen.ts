@@ -109,11 +109,15 @@ export async function renderScenario(container: HTMLElement): Promise<void> {
         if (!selectedHero) return alert('Сначала создайте героя');
         try {
           const data = await api.post('/api/sessions', { scenarioId: selectedScenarioId, heroId: selectedHero._id, maxPlayers: 1 });
+          if (!data.session) throw { error: 'Сервер не вернул сессию' };
           // Set to playing immediately for solo
           await api.patch(`/api/sessions/${data.session._id}/status`, { status: 'playing' });
-          sessionStorage.setItem('current_session', JSON.stringify({ ...data.session, status: 'playing' }));
-          navigateTo('/game');
-        } catch (err: any) { alert(err.error || 'Ошибка'); }
+          sessionStorage.setItem('current_session', JSON.stringify({ ...data.session, status: 'playing', scenarioName: data.session.scenarioId }));
+          window.location.href = '/game';
+        } catch (err: any) {
+          console.error('Solo start error:', err);
+          alert(err?.error || err?.message || JSON.stringify(err) || 'Ошибка создания игры');
+        }
       });
 
       document.getElementById('btn-multi')?.addEventListener('click', async () => {
