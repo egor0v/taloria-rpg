@@ -493,9 +493,9 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
       if (data.hero) {
         showLevelUpPopup(data.hero, data.rewards, container);
       } else {
-        renderInventoryScreen(container);
+        renderInventory(container);
       }
-    } catch { renderInventoryScreen(container); }
+    } catch { renderInventory(container); }
   });
 
   // ===== SPEND SKILL POINTS =====
@@ -513,12 +513,12 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
         });
         const data = await res.json();
         if (data.hero) {
-          renderInventoryScreen(container);
+          renderInventory(container);
         } else {
           // Refresh screen to sync with server state
-          renderInventoryScreen(container);
+          renderInventory(container);
         }
-      } catch { renderInventoryScreen(container); }
+      } catch { renderInventory(container); }
     });
   });
 
@@ -1076,6 +1076,6 @@ async function showLevelUpPopup(heroData: any, rewards: any, container: HTMLElem
 
   document.getElementById('levelup-done')?.addEventListener('click', () => {
     overlay.remove();
-    renderInventoryScreen(container);
+    renderInventory(container);
   });
 }
