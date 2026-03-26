@@ -79,15 +79,21 @@ export async function renderGameScreen(container: HTMLElement, urlSessionId?: st
 
   container.innerHTML = buildHTML(isSolo);
 
-  // Spectator banner
+  // Spectator restrictions: no actions, no menu, no chat — only map, log, player list
   if (isSpectator) {
     const banner = document.createElement('div');
     banner.className = 'spectator-banner';
     banner.innerHTML = `👁 Вы наблюдаете за игрой${user ? ' <button class="spectator-join-btn" id="btn-request-join">Присоединиться</button>' : ''}`;
     container.querySelector('.game-screen')?.prepend(banner);
-    // Hide action bar for spectators
+    // Hide: action bar, menu button, chat section
     const actionBar = document.getElementById('action-bar');
     if (actionBar) actionBar.style.display = 'none';
+    const menuBtn = document.getElementById('btn-menu');
+    if (menuBtn) menuBtn.style.display = 'none';
+    const chatSection = document.getElementById('game-chat');
+    if (chatSection) chatSection.style.display = 'none';
+    const chatInput = document.querySelector('.chat-input-row') as HTMLElement;
+    if (chatInput) chatInput.style.display = 'none';
   }
 
   // ─── SOCKET ───
@@ -675,6 +681,7 @@ function renderMap() {
   // Cell click handlers — all cells for markers, passable cells for movement
   mapEl.querySelectorAll('.map-cell').forEach(cell => {
     cell.addEventListener('click', () => {
+      if (isSpectator) return; // Spectators can only watch
       const cx = parseInt((cell as HTMLElement).dataset.x!);
       const cy = parseInt((cell as HTMLElement).dataset.y!);
       // In marker mode, allow clicking any cell
@@ -967,21 +974,34 @@ let abilityDefsCache: Record<string, any> = {};
 async function loadAbilityDefs() {
   if (Object.keys(abilityDefsCache).length > 0) return;
   try {
-    const data = await apiCall('/api/bestiary?tab=abilities&limit=500');
-    const items = data.data || data.abilities || (Array.isArray(data) ? data : []);
-    items.forEach((a: any) => {
+    // Try multiple pages to get all abilities (API returns max 100 per page)
+    let allItems: any[] = [];
+    for (let page = 1; page <= 5; page++) {
+      const resp = await fetch(`/api/bestiary?tab=abilities&limit=100&page=${page}`);
+      if (!resp.ok) break;
+      const data = await resp.json();
+      const items = data.data || [];
+      if (items.length === 0) break;
+      allItems = allItems.concat(items);
+      if (page >= (data.pages || 1)) break;
+    }
+    allItems.forEach((a: any) => {
       abilityDefsCache[a.abilityId] = {
         ...a,
         name: a.name || a.abilityId,
         description: a.description || a.desc || '',
         manaCost: a.manaCost ?? a.mpCost ?? 0,
         cooldown: a.cooldown ?? a.cd ?? 0,
-        range: a.range ?? 0,
+        range: a.range ?? 1,
+        duration: a.duration ?? 0,
+        targetType: a.targetType || 'target',
+        statuses: a.statuses || '',
+        icon: a.icon || '',
       };
     });
-    console.log(`Loaded ${items.length} ability defs`);
+    console.log(`[Taloria] Loaded ${allItems.length} ability defs`);
   } catch (err) {
-    console.error('Failed to load abilities:', err);
+    console.error('[Taloria] Failed to load abilities:', err);
   }
 }
 
