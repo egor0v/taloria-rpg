@@ -781,29 +781,64 @@ function setupMarker() {
   });
 }
 
-function showAbilityPopup() {
+// Ability definitions cache (loaded once from API)
+let abilityDefsCache: Record<string, any> = {};
+async function loadAbilityDefs() {
+  if (Object.keys(abilityDefsCache).length > 0) return;
+  try {
+    const data = await apiCall('/api/bestiary?tab=abilities&limit=500');
+    (data.data || []).forEach((a: any) => { abilityDefsCache[a.abilityId] = a; });
+  } catch {}
+}
+
+async function showAbilityPopup() {
   const popup = document.getElementById('ability-popup')!;
   const list = document.getElementById('ability-list')!;
   const hero = getMyHero();
   if (!hero) return;
 
-  const all = [...(hero.abilities || []), ...(hero.baseAbilities || [])];
-  list.innerHTML = all.map((a: any) => `
-    <div class="ability-option" data-id="${a.abilityId}">
-      <div class="ability-opt-name">${a.name}</div>
-      <div class="ability-opt-desc">${a.description || ''}</div>
-      <div class="ability-opt-cost">${a.manaCost ? a.manaCost + ' MP' : 'Бесплатно'}</div>
-    </div>
-  `).join('') || '<p style="color:var(--text-dim)">Нет способностей</p>';
+  await loadAbilityDefs();
+
+  // Hero abilities are arrays of abilityId strings
+  const abilityIds = [...(hero.abilities || []), ...(hero.learnedAbilities || [])];
+  // Deduplicate
+  const uniqueIds = [...new Set(abilityIds)];
+  // Filter out passives — only show active abilities
+  const activeAbilities = uniqueIds
+    .map(id => abilityDefsCache[id] || { abilityId: id, name: id, description: '', manaCost: 0 })
+    .filter(a => a.type !== 'passive');
+
+  const cooldowns = hero.cooldowns || {};
+
+  list.innerHTML = activeAbilities.length > 0 ? activeAbilities.map((a: any) => {
+    const cd = cooldowns[a.abilityId] || 0;
+    const canUse = (hero.mp || 0) >= (a.manaCost || 0) && cd <= 0;
+    const cdText = a.cooldown > 0 ? `Перезарядка: ${a.cooldown} ход${a.cooldown > 1 ? 'а' : ''}` : a.usesPerGame ? `${a.usesPerGame} раз за игру` : '';
+
+    return `
+      <div class="ability-option ${canUse ? '' : 'ability-option--disabled'}" data-id="${a.abilityId}">
+        <div class="ability-opt-header">
+          <span class="ability-opt-name">${a.name || a.abilityId}</span>
+          <span class="ability-opt-cost">${a.manaCost ? a.manaCost + ' MP' : 'Бесплатно'}</span>
+        </div>
+        <div class="ability-opt-desc">${a.description || ''}</div>
+        <div class="ability-opt-meta">
+          ${a.range ? `<span>Дальность: ${a.range}</span>` : ''}
+          ${cdText ? `<span>${cdText}</span>` : ''}
+          ${cd > 0 ? `<span class="ability-opt-cd">⏳ Перезарядка: ${cd}</span>` : ''}
+          ${(hero.mp || 0) < (a.manaCost || 0) ? '<span class="ability-opt-no-mana">Мало маны</span>' : ''}
+        </div>
+      </div>
+    `;
+  }).join('') : '<p style="color:var(--text-dim);text-align:center;padding:16px">Нет доступных способностей</p>';
 
   popup.style.display = 'flex';
-  list.querySelectorAll('.ability-option').forEach(el => {
+  list.querySelectorAll('.ability-option:not(.ability-option--disabled)').forEach(el => {
     el.addEventListener('click', () => {
       sock?.emit('action-request', { type: 'ability', abilityId: (el as HTMLElement).dataset.id });
       popup.style.display = 'none';
     });
   });
-  document.getElementById('ability-close')?.addEventListener('click', () => { popup.style.display = 'none'; });
 }
 
 function showItemPopup() {
