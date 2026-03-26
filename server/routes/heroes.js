@@ -65,6 +65,10 @@ router.get('/', auth(), async (req, res, next) => {
     const lookup = await getImgLookup();
     const enriched = heroes.map(h => {
       const obj = h.toObject();
+      // Recalculate canLevelUp
+      const nextXp = XP_THRESHOLDS[obj.level + 1] || Infinity;
+      obj.canLevelUp = (obj.xp || 0) >= nextXp;
+      obj.xpToNext = nextXp;
       normalizeEquipment(obj.equipment);
       enrichItemImages(obj, lookup);
       return obj;
@@ -142,7 +146,11 @@ router.get('/:id', auth(), async (req, res, next) => {
   try {
     const hero = await Hero.findOne({ _id: req.params.id, userId: req.user.userId });
     if (!hero) return res.status(404).json({ error: 'Герой не найден' });
+    // Recalculate canLevelUp and xpToNext on every read
+    const nextLevelXp = XP_THRESHOLDS[hero.level + 1] || Infinity;
+    hero.canLevelUp = hero.xp >= nextLevelXp;
     const obj = hero.toObject();
+    obj.xpToNext = nextLevelXp;
     normalizeEquipment(obj.equipment);
     const lookup = await getImgLookup();
     enrichItemImages(obj, lookup);

@@ -109,11 +109,17 @@
 }
 .hero-levelup-icon {
   position: absolute;
-  bottom: 12px;
-  left: 12px;
-  color: var(--cta);
-  font-size: 1.2rem;
-  animation: pulse 1.5s infinite;
+  top: 10px;
+  left: 10px;
+  color: var(--gold, #f6c86d);
+  font-size: 1.5rem;
+  z-index: 3;
+  filter: drop-shadow(0 0 6px rgba(246,200,109,0.6));
+  animation: levelUpArrow 1.2s ease-in-out infinite;
+}
+@keyframes levelUpArrow {
+  0%, 100% { transform: translateY(0); opacity: 0.8; }
+  50% { transform: translateY(-4px); opacity: 1; }
 }
 
 /* Info section */
