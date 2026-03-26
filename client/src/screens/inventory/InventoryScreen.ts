@@ -857,6 +857,27 @@ const ABILITY_DB: Record<string, { name: string; type: string; cls: string; mana
   'lullaby': { name: 'Колыбельная', type: 'class_ability', cls: 'bard', manaCost: 5, cooldown: 0, desc: 'С 50% шансом усыпляет врага на 1 ход. Дальность 4 клетки.', unlockLevel: 4, difficulty: 2, range: 4 },
   'discord': { name: 'Диссонанс', type: 'class_ability', cls: 'bard', manaCost: 7, cooldown: 0, desc: 'Ослабляет врагов в радиусе 2: -2 к атаке на 2 хода.', unlockLevel: 7, difficulty: 3, range: 4 },
   'song-of-rest': { name: 'Песнь отдыха', type: 'class_ability', cls: 'bard', manaCost: 9, cooldown: 0, desc: 'Восстанавливает d6+3 HP и 5 MP всем союзникам.', unlockLevel: 10, difficulty: 4 },
+  // Lv15+
+  'mana-drain': { name: 'Поглощение маны', type: 'spell', cls: 'mage', manaCost: 8, cooldown: 2, desc: 'Вытягивает d8 маны из врага и восстанавливает себе. Дальность 4.', unlockLevel: 15, difficulty: 4, range: 4 },
+  'charm': { name: 'Очарование', type: 'class_ability', cls: 'bard', manaCost: 10, cooldown: 3, desc: 'Очаровывает врага на 2 хода — он сражается на вашей стороне.', unlockLevel: 15, difficulty: 4, range: 4 },
+  // Lv20
+  'execute': { name: 'Казнь', type: 'class_ability', cls: 'warrior', manaCost: 10, cooldown: 3, desc: 'Мощный удар по цели с HP < 30%. Наносит тройной урон.', unlockLevel: 20, difficulty: 5 },
+  'meteor': { name: 'Метеор', type: 'spell', cls: 'mage', manaCost: 15, cooldown: 3, desc: 'Метеор обрушивается на область 2x2. d12 урона всем в зоне.', unlockLevel: 20, difficulty: 5, range: 6 },
+  'resurrection': { name: 'Воскрешение', type: 'spell', cls: 'priest', manaCost: 20, cooldown: 0, desc: 'Воскрешает павшего союзника с 30% HP. 1 раз за бой.', unlockLevel: 20, difficulty: 5, range: 3 },
+  'ballad': { name: 'Баллада героев', type: 'class_ability', cls: 'bard', manaCost: 12, cooldown: 3, desc: 'Вдохновляет всю группу: +3 ко всем статам на 3 хода.', unlockLevel: 20, difficulty: 5 },
+  // Lv25
+  'taunt': { name: 'Провокация', type: 'class_ability', cls: 'warrior', manaCost: 5, cooldown: 2, desc: 'Все враги в радиусе 3 атакуют только вас 2 хода. +2 броня.', unlockLevel: 25, difficulty: 4, range: 3 },
+  // Lv30
+  'second-wind': { name: 'Второе дыхание', type: 'class_ability', cls: 'warrior', manaCost: 0, cooldown: 0, desc: 'Восстанавливает 50% HP. 1 раз за бой.', unlockLevel: 30, difficulty: 5 },
+  'time-stop': { name: 'Остановка времени', type: 'spell', cls: 'mage', manaCost: 20, cooldown: 0, desc: 'Останавливает время на 2 хода. Все враги пропускают ходы. 1 раз за бой.', unlockLevel: 30, difficulty: 5 },
+  'divine-shield': { name: 'Божественный щит', type: 'spell', cls: 'priest', manaCost: 15, cooldown: 0, desc: 'Неуязвимость на 1 ход для всей группы. 1 раз за бой.', unlockLevel: 30, difficulty: 5 },
+  'sonic-blast': { name: 'Звуковая волна', type: 'class_ability', cls: 'bard', manaCost: 12, cooldown: 2, desc: 'Звуковая волна оглушает всех врагов в радиусе 3 на 1 ход.', unlockLevel: 30, difficulty: 5, range: 3 },
+  // Lv40
+  'champion-strike': { name: 'Удар чемпиона', type: 'class_ability', cls: 'warrior', manaCost: 15, cooldown: 0, desc: 'Легендарный удар. d20 урона + оглушение. 1 раз за бой.', unlockLevel: 40, difficulty: 5 },
+  'arcane-storm': { name: 'Магический шторм', type: 'spell', cls: 'mage', manaCost: 25, cooldown: 0, desc: 'Магический шторм по всей карте. d10 урона каждому врагу. 1 раз за бой.', unlockLevel: 40, difficulty: 5 },
+  'miracle': { name: 'Чудо', type: 'spell', cls: 'priest', manaCost: 25, cooldown: 0, desc: 'Полное исцеление всех союзников + снятие всех негативных эффектов. 1 раз за бой.', unlockLevel: 40, difficulty: 5 },
+  'epic-finale': { name: 'Финальный аккорд', type: 'class_ability', cls: 'bard', manaCost: 20, cooldown: 0, desc: 'Все союзники получают +5 ко всем статам на 3 хода + полное восстановление MP. 1 раз за бой.', unlockLevel: 40, difficulty: 5 },
+  // Racial passives
   'human-adaptability': { name: 'Адаптивность', type: 'passive', cls: 'any', manaCost: 0, cooldown: 0, desc: 'Расовая пассивка человека. +1 ко всем характеристикам.', unlockLevel: 1, difficulty: 0 },
   'elf-keen-sight': { name: 'Острое зрение', type: 'passive', cls: 'any', manaCost: 0, cooldown: 0, desc: 'Расовая пассивка эльфа. +1 к радиусу обзора.', unlockLevel: 1, difficulty: 0 },
   'dwarf-toughness': { name: 'Стойкость', type: 'passive', cls: 'any', manaCost: 0, cooldown: 0, desc: 'Расовая пассивка дварфа. +5 к максимальному HP.', unlockLevel: 1, difficulty: 0 },
