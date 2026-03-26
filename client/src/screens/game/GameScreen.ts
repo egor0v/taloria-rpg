@@ -44,17 +44,50 @@ let soundEnabled = true;
 // NPC data store (avoids inline JSON.stringify in HTML)
 const npcDataStore = new Map<string, any>();
 
-export function renderGameScreen(container: HTMLElement): void {
+// Track spectator state
+let isSpectator = false;
+let spectatorCount = 0;
+
+export async function renderGameScreen(container: HTMLElement, urlSessionId?: string): Promise<void> {
   clearElement(container);
 
-  const sessionData = sessionStorage.getItem('current_session');
-  if (!sessionData) { navigateTo('/dashboard'); return; }
-  session = JSON.parse(sessionData);
   user = getCurrentUser();
+
+  // Load session: from URL param, or from sessionStorage
+  if (urlSessionId) {
+    try {
+      const data = user
+        ? await apiCall(`/api/sessions/${urlSessionId}`)
+        : await fetch(`/api/sessions/${urlSessionId}/public`).then(r => r.json());
+      session = data.session || data;
+    } catch {
+      container.innerHTML = '<div style="padding:40px;text-align:center;color:#e8e6e0"><h2>Сессия не найдена</h2><a href="/dashboard" style="color:#f6c86d">← На главную</a></div>';
+      return;
+    }
+  } else {
+    const sessionData = sessionStorage.getItem('current_session');
+    if (!sessionData) { navigateTo('/dashboard'); return; }
+    session = JSON.parse(sessionData);
+  }
+
+  // Determine role: player or spectator
+  const isPlayer = user && session.players?.some((p: any) => p.userId?.toString() === user._id);
+  isSpectator = !isPlayer;
   const isSolo = session.maxPlayers === 1;
   const isHost = session.hostUserId === user?._id;
 
   container.innerHTML = buildHTML(isSolo);
+
+  // Spectator banner
+  if (isSpectator) {
+    const banner = document.createElement('div');
+    banner.className = 'spectator-banner';
+    banner.innerHTML = `👁 Вы наблюдаете за игрой${user ? ' <button class="spectator-join-btn" id="btn-request-join">Присоединиться</button>' : ''}`;
+    container.querySelector('.game-screen')?.prepend(banner);
+    // Hide action bar for spectators
+    const actionBar = document.getElementById('action-bar');
+    if (actionBar) actionBar.style.display = 'none';
+  }
 
   // ─── SOCKET ───
   sock = getGameSocket();
@@ -62,7 +95,11 @@ export function renderGameScreen(container: HTMLElement): void {
   sock.off('action-error'); sock.off('ai-narration'); sock.off('chat-message');
   sock.off('player-connected'); sock.off('player-disconnected'); sock.off('error'); sock.off('game-saved');
 
-  sock.emit('join-session', { sessionId: session._id });
+  if (isSpectator) {
+    sock.emit('join-as-spectator', { sessionId: session._id, displayName: user?.displayName || 'Гость' });
+  } else {
+    sock.emit('join-session', { sessionId: session._id });
+  }
 
   let briefingShown = false;
   sock.on('game-state', (data: any) => {
@@ -150,6 +187,32 @@ export function renderGameScreen(container: HTMLElement): void {
   sock.on('error', (data: any) => log(`⚠ ${data.message}`, 'error'));
   sock.on('game-saved', () => log('💾 Сохранено', 'system'));
 
+  // ─── SPECTATOR EVENTS ───
+  sock.on('spectator-joined', (data: any) => {
+    spectatorCount = data.spectatorCount || (spectatorCount + 1);
+    updateSpectatorPanel();
+    log(`👁 ${data.displayName || 'Гость'} наблюдает за игрой`, 'system');
+  });
+  sock.on('spectator-left', (data: any) => {
+    spectatorCount = data.spectatorCount || Math.max(0, spectatorCount - 1);
+    updateSpectatorPanel();
+  });
+  sock.on('spectator-count', (data: any) => {
+    spectatorCount = data.count || 0;
+    updateSpectatorPanel();
+  });
+  // Join request from spectator (shown to host)
+  sock.on('join-request', (data: any) => {
+    if (isHost || (isSolo && !isSpectator)) {
+      showJoinRequestPopup(data);
+    }
+  });
+  // Request join button (for spectator)
+  document.getElementById('btn-request-join')?.addEventListener('click', () => {
+    sock?.emit('request-join-game', { sessionId: session._id, displayName: user?.displayName });
+    log('📤 Запрос на присоединение отправлен', 'system');
+  });
+
   // ─── UI SETUP ───
   setupActions(isSolo, isHost);
   setupMenu(isSolo);
@@ -199,6 +262,10 @@ function buildHTML(isSolo: boolean): string {
     <div class="game-team-panel" id="team-panel-wrap">
       <div class="team-title">⚔ КОМАНДА</div>
       <div id="team-panel"></div>
+      <div class="spectator-section" id="spectator-section" style="display:none">
+        <div class="spectator-divider">── Наблюдатели ──</div>
+        <div class="spectator-count" id="spectator-count">👁 0 зрителей</div>
+      </div>
     </div>
 
     <!-- Map -->
@@ -275,6 +342,19 @@ function buildHTML(isSolo: boolean): string {
       </div>
     </div>
   </div>` : ''}
+
+  <!-- Join request popup -->
+  <div class="game-popup-overlay" id="join-request-popup" style="display:none">
+    <div class="game-popup join-request-content">
+      <span class="popup-x-close" data-close="join-request-popup">✕</span>
+      <h3 id="join-request-title">👤 Запрос на вход</h3>
+      <p id="join-request-text"></p>
+      <div class="join-request-actions">
+        <button class="dice-popup-btn" id="join-approve">✅ Пустить в игру</button>
+        <button class="popup-close" id="join-spectator" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);color:var(--text);padding:10px 20px;border-radius:6px;cursor:pointer">👁 Оставить наблюдателем</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Turn order panel (combat) -->
   <div class="turn-order-panel" id="turn-order-panel" style="display:none"></div>
@@ -1731,6 +1811,44 @@ function showChestLootPopup(chestId: string, loot: any) {
   document.getElementById('chest-close')?.addEventListener('click', () => {
     popup.style.display = 'none';
   });
+}
+
+// ═══════════════════════════════════
+// SPECTATOR UI
+// ═══════════════════════════════════
+function updateSpectatorPanel() {
+  const section = document.getElementById('spectator-section');
+  const countEl = document.getElementById('spectator-count');
+  if (section && spectatorCount > 0) {
+    section.style.display = 'block';
+    if (countEl) countEl.textContent = `👁 ${spectatorCount} ${spectatorCount === 1 ? 'зритель' : spectatorCount < 5 ? 'зрителя' : 'зрителей'}`;
+  } else if (section) {
+    section.style.display = 'none';
+  }
+}
+
+function showJoinRequestPopup(data: any) {
+  const popup = document.getElementById('join-request-popup')!;
+  const textEl = document.getElementById('join-request-text')!;
+  textEl.textContent = `${data.displayName || 'Игрок'} хочет присоединиться к игре!`;
+  popup.style.display = 'flex';
+
+  const approveBtn = document.getElementById('join-approve')!;
+  const spectatorBtn = document.getElementById('join-spectator')!;
+
+  const cleanup = () => { popup.style.display = 'none'; };
+
+  approveBtn.onclick = () => {
+    sock?.emit('approve-join', { sessionId: session._id, userId: data.userId, approved: true });
+    log(`✅ ${data.displayName} принят в игру`, 'system');
+    cleanup();
+  };
+  spectatorBtn.onclick = () => {
+    sock?.emit('approve-join', { sessionId: session._id, userId: data.userId, approved: false });
+    log(`👁 ${data.displayName} остаётся наблюдателем`, 'system');
+    cleanup();
+  };
+  popup.querySelector('.popup-x-close')?.addEventListener('click', cleanup);
 }
 
 // ═══════════════════════════════════

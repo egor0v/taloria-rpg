@@ -106,6 +106,29 @@ router.get('/stats', auth(), validate(statsQuerySchema), async (req, res, next) 
   } catch (err) { next(err); }
 });
 
+// GET /api/sessions/:id/public — no auth required, minimal info for spectators
+router.get('/:id/public', async (req, res, next) => {
+  try {
+    const session = await GameSession.findById(req.params.id)
+      .select('scenarioId mapId status maxPlayers players hostUserId inviteCode spectatorCount')
+      .lean();
+    if (!session) return res.status(404).json({ error: 'Сессия не найдена' });
+    res.json({
+      session: {
+        _id: session._id,
+        scenarioId: session.scenarioId,
+        mapId: session.mapId,
+        status: session.status,
+        maxPlayers: session.maxPlayers,
+        playersCount: session.players?.length || 0,
+        hostUserId: session.hostUserId,
+        players: (session.players || []).map(p => ({ displayName: p.displayName, role: p.role, connected: p.connected })),
+        spectatorCount: session.spectatorCount || 0,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 // GET /api/sessions/:id
 router.get('/:id', auth(), async (req, res, next) => {
   try {

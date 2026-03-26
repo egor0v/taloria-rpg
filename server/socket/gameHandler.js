@@ -184,6 +184,10 @@ function setupGameHandler(io) {
 
     // --- Action request ---
     socket.on('action-request', async (data) => {
+      // Block spectators from acting
+      if (socket.isSpectator) {
+        return socket.emit('action-error', { error: 'Вы наблюдатель — действия недоступны' });
+      }
       // Support both { sessionId, action } and flat { type, x, y, ... }
       let action, reqSessionId;
       if (data.action) {
@@ -415,6 +419,120 @@ function setupGameHandler(io) {
           socket.emit('game-saved', { success: true, timestamp: new Date().toISOString() });
         } catch (err) {
           console.error('save-game error:', err);
+        }
+      }
+    });
+
+    // --- Join as spectator ---
+    socket.on('join-as-spectator', async ({ sessionId, displayName }) => {
+      if (!sessionId) return;
+      try {
+        const session = await GameSession.findById(sessionId);
+        if (!session) return socket.emit('error', { message: 'Сессия не найдена' });
+
+        socket.join(`session:${sessionId}`);
+        socket.sessionId = sessionId;
+        socket.isSpectator = true;
+        socket.displayName = displayName || 'Гость';
+
+        // Count spectators in room
+        const room = gameNsp.adapter.rooms.get(`session:${sessionId}`);
+        const allSockets = room ? [...room] : [];
+        let specCount = 0;
+        for (const sid of allSockets) {
+          const s = gameNsp.sockets.get(sid);
+          if (s?.isSpectator) specCount++;
+        }
+
+        // Send current game state (readonly)
+        const engine = activeGames.get(sessionId);
+        socket.emit('game-state', {
+          gameState: engine?.gs || session.gameState || null,
+          session: { _id: session._id, status: session.status, players: session.players },
+        });
+
+        // Broadcast to all
+        gameNsp.to(`session:${sessionId}`).emit('spectator-joined', {
+          displayName: socket.displayName,
+          spectatorCount: specCount,
+        });
+      } catch (err) {
+        socket.emit('error', { message: 'Ошибка подключения' });
+      }
+    });
+
+    // --- Request to join game (spectator → player) ---
+    socket.on('request-join-game', async ({ sessionId, displayName }) => {
+      if (!sessionId || !socket.userId) return;
+      // Send to host
+      const session = await GameSession.findById(sessionId);
+      if (!session) return;
+      const hostSocket = [...(gameNsp.adapter.rooms.get(`session:${sessionId}`) || [])].find(sid => {
+        const s = gameNsp.sockets.get(sid);
+        return s && s.userId === session.hostUserId?.toString();
+      });
+      if (hostSocket) {
+        gameNsp.sockets.get(hostSocket)?.emit('join-request', {
+          userId: socket.userId,
+          displayName: displayName || socket.displayName || 'Игрок',
+          sessionId,
+        });
+      } else {
+        // Broadcast to all players if host not found
+        gameNsp.to(`session:${sessionId}`).emit('join-request', {
+          userId: socket.userId,
+          displayName: displayName || socket.displayName || 'Игрок',
+          sessionId,
+        });
+      }
+    });
+
+    // --- Approve/reject join request ---
+    socket.on('approve-join', async ({ sessionId, userId, approved }) => {
+      if (!sessionId || !userId) return;
+      const session = await GameSession.findById(sessionId);
+      if (!session) return;
+      // Only host can approve
+      if (session.hostUserId?.toString() !== socket.userId) return;
+
+      if (approved && session.players.length < session.maxPlayers) {
+        // Add player to session
+        session.players.push({
+          userId,
+          displayName: '',
+          connected: true,
+          ready: true,
+          role: 'player',
+        });
+        await session.save();
+
+        // Find spectator socket and convert to player
+        const room = gameNsp.adapter.rooms.get(`session:${sessionId}`);
+        if (room) {
+          for (const sid of room) {
+            const s = gameNsp.sockets.get(sid);
+            if (s && s.userId === userId) {
+              s.isSpectator = false;
+              s.emit('join-approved', { session });
+              break;
+            }
+          }
+        }
+
+        gameNsp.to(`session:${sessionId}`).emit('player-connected', {
+          userId, displayName: 'Новый игрок',
+        });
+      } else {
+        // Rejected — stay as spectator
+        const room = gameNsp.adapter.rooms.get(`session:${sessionId}`);
+        if (room) {
+          for (const sid of room) {
+            const s = gameNsp.sockets.get(sid);
+            if (s && s.userId === userId) {
+              s.emit('join-rejected', { reason: approved ? 'Игра заполнена' : 'Хост отклонил запрос' });
+              break;
+            }
+          }
         }
       }
     });

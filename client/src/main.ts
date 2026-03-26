@@ -72,6 +72,15 @@ router.addRoute('/create', () => {
   renderCharCreate(container);
 }, requireAuth);
 
+router.addRoute('/game/:sessionId', async (params) => {
+  showNav(false);
+  // Load session from URL and render game (player or spectator)
+  if (params?.sessionId) {
+    sessionStorage.setItem('game_session_id', params.sessionId);
+  }
+  renderGameScreen(container, params?.sessionId);
+});
+
 router.addRoute('/game', () => {
   showNav(false);
   renderGameScreen(container);
@@ -140,7 +149,7 @@ router.addRoute('/join/:code', (params) => {
 // Guard: redirect to login if not authenticated
 router.setBeforeEach((path) => {
   const publicPaths = ['/', '/join', '/about'];
-  const isPublic = publicPaths.some(p => path === p || path.startsWith('/join/'));
+  const isPublic = publicPaths.some(p => path === p || path.startsWith('/join/') || path.startsWith('/game/'));
   if (!isPublic && !getCurrentUser()) {
     navigateTo('/', true);
     return false;

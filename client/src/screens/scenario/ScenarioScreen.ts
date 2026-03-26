@@ -113,7 +113,7 @@ export async function renderScenario(container: HTMLElement): Promise<void> {
           // Set to playing immediately for solo
           await api.patch(`/api/sessions/${data.session._id}/status`, { status: 'playing' });
           sessionStorage.setItem('current_session', JSON.stringify({ ...data.session, status: 'playing', scenarioName: data.session.scenarioId }));
-          window.location.href = '/game';
+          window.location.href = `/game/${data.session._id}`;
         } catch (err: any) {
           console.error('Solo start error:', err);
           alert(err?.error || err?.message || JSON.stringify(err) || 'Ошибка создания игры');
