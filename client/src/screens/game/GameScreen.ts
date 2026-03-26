@@ -431,7 +431,8 @@ function updateHUD() {
   el('btn-item')?.classList.toggle('action-btn--disabled', !!bonusUsed);
 
   // Show "no actions left" popup when all actions exhausted
-  if (moveUsed && actionUsed && bonusUsed && !document.querySelector('.no-actions-popup')) {
+  const moveExhausted = steps <= 0;
+  if (moveExhausted && actionUsed && bonusUsed && !document.querySelector('.no-actions-popup')) {
     const popup = document.createElement('div');
     popup.className = 'no-actions-popup';
     popup.innerHTML = `
@@ -447,7 +448,7 @@ function updateHUD() {
     });
   }
   // Remove popup if actions restored (new turn)
-  if (!moveUsed || !actionUsed || !bonusUsed) {
+  if (!moveExhausted || !actionUsed || !bonusUsed) {
     document.querySelector('.no-actions-popup')?.remove();
   }
 
