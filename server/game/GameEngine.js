@@ -10,6 +10,22 @@ const {
 const LootGenerator = require('./LootGenerator');
 
 // ============================================================
+// INVENTORY HELPER — stackable items merge, others push
+// ============================================================
+function addToInventory(inventory, item, qty = 1) {
+  const id = item.itemId || item.name;
+  const isStackable = item.stackable || ['potion', 'scroll', 'food', 'provisions', 'ingredient', 'reagent', 'material', 'tool', 'junk'].includes(item.type);
+  if (isStackable && id) {
+    const existing = inventory.find(i => (i.itemId || i.name) === id);
+    if (existing) {
+      existing.quantity = (existing.quantity || 1) + qty;
+      return;
+    }
+  }
+  inventory.push({ ...item, quantity: qty });
+}
+
+// ============================================================
 // CONSTANTS
 // ============================================================
 
@@ -1222,7 +1238,7 @@ class GameEngine {
       if (loot.silver) hero.silver = (hero.silver || 0) + loot.silver;
       if (loot.gold) hero.gold = (hero.gold || 0) + loot.gold;
       if (loot.items) {
-        loot.items.forEach(item => { hero.inventory.push(item); takenItems.push(item.name); });
+        loot.items.forEach(item => { addToInventory(hero.inventory, item); takenItems.push(item.name); });
       }
       obj.opened = true;
       obj.loot = null;
@@ -1232,7 +1248,7 @@ class GameEngine {
       sorted.forEach(idx => {
         if (loot.items && loot.items[idx]) {
           const item = loot.items.splice(idx, 1)[0];
-          hero.inventory.push(item);
+          addToInventory(hero.inventory, item);
           takenItems.push(item.name);
         }
       });
@@ -1889,7 +1905,7 @@ class GameEngine {
         const loot = LootGenerator.generateMonsterLoot ? LootGenerator.generateMonsterLoot(lootTier) : null;
         if (loot?.items?.length && aliveHeroes.length > 0) {
           const recipient = aliveHeroes[Math.floor(Math.random() * aliveHeroes.length)];
-          loot.items.forEach(item => recipient.inventory.push(item));
+          loot.items.forEach(item => addToInventory(recipient.inventory, item));
           rewards.items.push(...loot.items);
         }
       });

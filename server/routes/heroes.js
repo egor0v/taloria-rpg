@@ -298,7 +298,14 @@ router.post('/:id/trade', auth(), validate(tradeSchema), async (req, res, next) 
 
     const item = items[Math.floor(Math.random() * items.length)];
     hero.tradePoints -= cost;
-    hero.inventory.push({ ...item, quantity: 1 });
+    // Stack if same item already in inventory
+    const existingIdx = hero.inventory.findIndex(i => (i.itemId || i.name) === (item.itemId || item.name));
+    if (existingIdx >= 0 && (item.stackable || ['potion', 'scroll', 'food', 'ingredient', 'reagent', 'material', 'tool', 'junk'].includes(item.type))) {
+      hero.inventory[existingIdx].quantity = (hero.inventory[existingIdx].quantity || 1) + 1;
+      hero.markModified('inventory');
+    } else {
+      hero.inventory.push({ ...item, quantity: 1 });
+    }
     await hero.save();
     res.json({ hero, item });
   } catch (err) { next(err); }

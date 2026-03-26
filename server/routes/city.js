@@ -474,7 +474,18 @@ router.post('/trade/:offerId/accept', auth(), async (req, res, next) => {
     for (const offerItem of trade.offerItems) {
       if (offerItem.itemIndex < fromHero.inventory.length) {
         const item = fromHero.inventory[offerItem.itemIndex];
-        if (toHero) toHero.inventory.push({ ...item.toObject ? item.toObject() : item });
+        if (toHero) {
+          const raw = item.toObject ? item.toObject() : { ...item };
+          const id = raw.itemId || raw.name;
+          const isStackable = raw.stackable || ['potion', 'scroll', 'food', 'ingredient', 'reagent', 'material', 'tool', 'junk'].includes(raw.type);
+          const existIdx = isStackable ? toHero.inventory.findIndex(i => (i.itemId || i.name) === id) : -1;
+          if (existIdx >= 0) {
+            toHero.inventory[existIdx].quantity = (toHero.inventory[existIdx].quantity || 1) + (raw.quantity || 1);
+            toHero.markModified('inventory');
+          } else {
+            toHero.inventory.push(raw);
+          }
+        }
       }
     }
     // Remove offered items (reverse order to maintain indices)
