@@ -40,6 +40,7 @@ let zoom = 1;
 let actionMode = 'move';
 let aiEnabled = true;
 let soundEnabled = true;
+let pendingAbilityId: string | null = null;
 
 // NPC data store (avoids inline JSON.stringify in HTML)
 const npcDataStore = new Map<string, any>();
@@ -737,6 +738,25 @@ function onCellClick(x: number, y: number) {
     return;
   }
 
+  // Ability target selection — select monster or cell
+  if (actionMode === 'ability-target' && pendingAbilityId) {
+    const targetMonster = gs.monsters?.find((m: any) => m.alive && m.col === x && m.row === y);
+    if (targetMonster) {
+      sock.emit('action-request', { type: 'ability', abilityId: pendingAbilityId, targetId: targetMonster.id });
+      pendingAbilityId = null;
+      actionMode = 'move';
+    } else {
+      log('❌ Выберите цель (NPC или монстра)', 'error');
+    }
+    return;
+  }
+  if (actionMode === 'ability-area' && pendingAbilityId) {
+    sock.emit('action-request', { type: 'ability', abilityId: pendingAbilityId, targetRow: y, targetCol: x });
+    pendingAbilityId = null;
+    actionMode = 'move';
+    return;
+  }
+
   // Click on hostile monster → attack (row=y, col=x)
   const monster = gs.monsters?.find((m: any) => m.alive && !m.friendly && m.discovered && m.col === x && m.row === y);
   if (monster && (actionMode === 'attack' || actionMode === 'move')) {
@@ -992,19 +1012,24 @@ async function showAbilityPopup() {
   list.innerHTML = activeAbilities.length > 0 ? activeAbilities.map((a: any) => {
     const cd = cooldowns[a.abilityId] || 0;
     const canUse = (hero.mp || 0) >= (a.manaCost || 0) && cd <= 0;
-    const cdText = a.cooldown > 0 ? `Перезарядка: ${a.cooldown} ход${a.cooldown > 1 ? 'а' : ''}` : a.usesPerGame ? `${a.usesPerGame} раз за игру` : '';
+    const cdText = a.cooldown > 0 ? `🔄 ${a.cooldown} ход${a.cooldown > 1 ? 'а' : ''}` : a.usesPerGame ? `${a.usesPerGame}× за игру` : '';
+
+    // Build short effect line from description/statuses/desc
+    const shortDesc = buildShortAbilityDesc(a);
+    const targetLabel = a.targetType === 'area' ? '🎯 Область' : a.targetType === 'self' ? '🧘 На себя' : '🎯 Цель';
 
     return `
-      <div class="ability-option ${canUse ? '' : 'ability-option--disabled'}" data-id="${a.abilityId}">
+      <div class="ability-option ${canUse ? '' : 'ability-option--disabled'}" data-id="${a.abilityId}" data-target="${a.targetType || 'target'}">
         <div class="ability-opt-header">
-          <span class="ability-opt-name">${a.name || a.abilityId}</span>
+          <span class="ability-opt-name">${a.icon || '✨'} ${a.name || a.abilityId}</span>
           <span class="ability-opt-cost">${a.manaCost ? a.manaCost + ' MP' : 'Бесплатно'}</span>
         </div>
-        <div class="ability-opt-desc">${a.description || ''}</div>
+        <div class="ability-opt-desc">${shortDesc}</div>
         <div class="ability-opt-meta">
+          <span>${targetLabel}</span>
           ${a.range ? `<span>Дальность: ${a.range}</span>` : ''}
           ${cdText ? `<span>${cdText}</span>` : ''}
-          ${cd > 0 ? `<span class="ability-opt-cd">⏳ Перезарядка: ${cd}</span>` : ''}
+          ${cd > 0 ? `<span class="ability-opt-cd">⏳ Осталось: ${cd}</span>` : ''}
           ${(hero.mp || 0) < (a.manaCost || 0) ? '<span class="ability-opt-no-mana">Мало маны</span>' : ''}
         </div>
       </div>
@@ -1014,10 +1039,80 @@ async function showAbilityPopup() {
   popup.style.display = 'flex';
   list.querySelectorAll('.ability-option:not(.ability-option--disabled)').forEach(el => {
     el.addEventListener('click', () => {
-      sock?.emit('action-request', { type: 'ability', abilityId: (el as HTMLElement).dataset.id });
+      const abilityId = (el as HTMLElement).dataset.id!;
+      const targetType = (el as HTMLElement).dataset.target || 'target';
       popup.style.display = 'none';
+
+      if (targetType === 'self') {
+        // Self-cast: emit directly
+        sock?.emit('action-request', { type: 'ability', abilityId });
+      } else {
+        // Need to select target (monster) or cell (area)
+        actionMode = targetType === 'area' ? 'ability-area' : 'ability-target';
+        pendingAbilityId = abilityId;
+        log(`🎯 Выберите ${targetType === 'area' ? 'клетку' : 'цель'} для ${abilityDefsCache[abilityId]?.name || abilityId}`, 'system');
+      }
     });
   });
+}
+
+// Short description builder for ability popup
+function buildShortAbilityDesc(a: any): string {
+  const desc = a.description || a.desc || '';
+  const statuses = a.statuses || '';
+
+  // Extract key effects from description
+  const effects: string[] = [];
+
+  // Damage patterns
+  const dmgMatch = desc.match(/(\d+d\d+)\s*урон/i) || desc.match(/наносит\s+(\d+d?\d*)\s*урон/i);
+  if (dmgMatch) effects.push(`${dmgMatch[1]} урона`);
+  else if (desc.includes('урон')) effects.push('Урон');
+
+  // Healing
+  if (desc.match(/восстан|лечен|исцел/i)) effects.push('Лечение');
+
+  // Shield/buff
+  if (desc.match(/щит|защит/i)) effects.push('Щит');
+  if (desc.match(/\+\d+.*(?:атак|брон|ловк|инте)/i)) {
+    const m = desc.match(/(\+\d+.*?(?:атак|брон|ловк|инте|муд|хар)\S*)/i);
+    if (m) effects.push(m[1].substring(0, 30));
+  }
+
+  // Status effects
+  if (statuses) effects.push(statuses);
+  else {
+    if (desc.match(/горен|огн/i)) effects.push('Горение');
+    if (desc.match(/замо|замед|обездв/i)) effects.push('Заморозка');
+    if (desc.match(/оглуш|стан/i)) effects.push('Оглушение');
+    if (desc.match(/ошелом/i)) effects.push('Ошеломление');
+    if (desc.match(/очаров/i)) effects.push('Очарование');
+    if (desc.match(/усыпл|сон/i)) effects.push('Усыпление');
+    if (desc.match(/немот/i)) effects.push('Немота');
+    if (desc.match(/кровотеч/i)) effects.push('Кровотечение');
+    if (desc.match(/воодушев/i)) effects.push('Воодушевление');
+    if (desc.match(/уязвим/i)) effects.push('Уязвимость');
+    if (desc.match(/метк[аи]/i)) effects.push('Метка');
+    if (desc.match(/ослабл/i)) effects.push('Ослабление');
+  }
+
+  // Duration
+  const durMatch = desc.match(/на\s+(\d+)\s*ход/i);
+  if (durMatch) effects.push(`${durMatch[1]} хода`);
+
+  // Range/area
+  if (desc.match(/област|радиус/i)) {
+    const rMatch = desc.match(/радиус\S?\s*(\d+)/i);
+    if (rMatch) effects.push(`Радиус ${rMatch[1]}`);
+    else effects.push('Область');
+  }
+
+  if (effects.length === 0) {
+    // Fallback: first sentence truncated
+    const first = desc.split(/[.!?;]/)[0] || '';
+    return first.length > 60 ? first.substring(0, 57) + '...' : first;
+  }
+  return effects.join('. ') + '.';
 }
 
 function showItemPopup() {
