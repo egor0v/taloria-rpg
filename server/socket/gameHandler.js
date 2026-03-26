@@ -381,10 +381,10 @@ function setupGameHandler(io) {
     socket.on('save-game', async () => {
       const sessionId = socket.sessionId;
       if (!sessionId) return;
-      const gs = activeGames.get(sessionId);
-      if (gs) {
+      const engine = activeGames.get(sessionId);
+      if (engine?.gs) {
         try {
-          await GameSession.findByIdAndUpdate(sessionId, { gameState: gs });
+          await GameSession.findByIdAndUpdate(sessionId, { gameState: engine.gs, status: 'paused' });
           socket.emit('game-saved', { success: true, timestamp: new Date().toISOString() });
         } catch (err) {
           console.error('save-game error:', err);

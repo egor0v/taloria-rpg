@@ -1032,28 +1032,32 @@ function setupMenu(isSolo: boolean) {
   document.getElementById('menu-restart')?.addEventListener('click', async () => {
     if (!confirm('Начать сначала? Прогресс будет сброшен.')) return;
     try {
+      sock?.disconnect();
       await apiCall(`/api/sessions/${session._id}`, { method: 'DELETE' });
       const hero = getMyHero();
-      const res = await apiCall('/api/sessions', { method: 'POST', body: JSON.stringify({ scenarioId: session.scenarioId, heroId: hero?.id, maxPlayers: 1 }) });
+      const res = await apiCall('/api/sessions', { method: 'POST', body: JSON.stringify({ scenarioId: session.scenarioId, heroId: hero?.heroId || hero?._id, maxPlayers: 1 }) });
       if (res.session) {
         await apiCall(`/api/sessions/${res.session._id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'playing' }) });
         sessionStorage.setItem('current_session', JSON.stringify({ ...res.session, status: 'playing', scenarioName: session.scenarioName }));
-        const container = document.querySelector('.game-screen')?.parentElement;
-        if (container) renderGameScreen(container as HTMLElement);
+        window.location.href = '/game';
       }
-    } catch { log('❌ Ошибка рестарта', 'error'); }
+    } catch (e: any) { log(`❌ Ошибка рестарта: ${e.error || e.message || ''}`, 'error'); }
     document.getElementById('menu-overlay')!.style.display = 'none';
   });
   document.getElementById('menu-save-exit')?.addEventListener('click', () => {
     sock?.emit('save-game', {});
-    setTimeout(() => navigateTo('/dashboard'), 500);
+    sock?.disconnect();
+    sessionStorage.removeItem('current_session');
+    setTimeout(() => { window.location.href = '/dashboard'; }, 300);
   });
   document.getElementById('menu-exit-nosave')?.addEventListener('click', async () => {
     if (!confirm('Выйти? Прогресс потерян, игра прервана.')) return;
     try {
       await apiCall(`/api/sessions/${session._id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'abandoned' }) });
     } catch {}
-    navigateTo('/dashboard');
+    sock?.disconnect();
+    sessionStorage.removeItem('current_session');
+    window.location.href = '/dashboard';
   });
 }
 
