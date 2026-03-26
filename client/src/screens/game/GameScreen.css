@@ -168,6 +168,47 @@
 .action-btn--active { border-color: var(--cta); color: var(--cta); background: rgba(58,204,96,0.08); }
 .action-btn--disabled { opacity: 0.35; pointer-events: none; border-color: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.3) !important; background: transparent !important; }
 
+/* ─── Action dropdown ─── */
+.action-btn-dropdown-wrap { position: relative; }
+.action-dropdown {
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 2px; min-width: 200px;
+  background: linear-gradient(145deg, #2a2520, #1a1610); border: 1px solid var(--gold-dim, #c9a24e);
+  border-radius: 8px; padding: 6px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); z-index: 100;
+}
+.action-dd-item {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  background: transparent; border: none; color: var(--text, #e8e6e0); font-family: var(--font-body);
+  font-size: 0.85rem; border-radius: 6px; cursor: pointer; text-align: left; white-space: nowrap;
+}
+.action-dd-item:hover { background: rgba(201,162,78,0.15); color: var(--gold, #f6c86d); }
+
+/* ─── Free action textarea ─── */
+.free-action-textarea {
+  width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text, #e8e6e0); padding: 10px 12px; border-radius: 6px; font-family: var(--font-body);
+  font-size: 0.9rem; resize: vertical; min-height: 80px;
+}
+.free-action-textarea:focus { outline: none; border-color: var(--gold-dim, #c9a24e); }
+
+/* ─── Markers ─── */
+.map-marker {
+  position: absolute; top: 1px; right: 1px; font-size: 14px; line-height: 1;
+  color: #ff6b6b; text-shadow: 0 0 4px rgba(255,107,107,0.8); pointer-events: none; z-index: 5;
+}
+.marker-types { display: flex; gap: 6px; justify-content: center; margin: 12px 0; }
+.marker-type-btn {
+  width: 44px; height: 44px; font-size: 1.3rem; background: rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text-dim);
+  cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.marker-type-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.marker-type-btn--active { border-color: #ff6b6b; color: #ff6b6b; background: rgba(255,107,107,0.1); }
+.marker-visibility { margin-top: 12px; }
+.marker-vis-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.marker-vis-option { display: flex; align-items: center; gap: 6px; color: var(--text-dim); font-size: 0.85rem; cursor: pointer; }
+.marker-vis-option input { accent-color: var(--gold); }
+
 /* NPC hover popup */
 .npc-hover-popup { position: fixed; z-index: 10000; background: linear-gradient(145deg, #2a2520, #1a1610); border: 1px solid rgba(201,162,78,0.4); border-radius: 10px; padding: 12px 16px; min-width: 200px; max-width: 280px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); pointer-events: auto; }
 .npc-hover-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -393,18 +434,14 @@
 .dice-popup-value { font-family: 'Cinzel', serif; font-size: 2.2rem; font-weight: 900; color: var(--gold, #c9a24e); text-shadow: 0 2px 8px rgba(0,0,0,0.6); transition: color 0.3s, transform 0.3s; }
 .dice-value-success { color: #3acc60 !important; transform: scale(1.2); }
 .dice-value-fail { color: #ff4d4d !important; transform: scale(1.2); }
-.dice-shaking { animation: diceFloat 0.6s ease-in-out infinite; filter: blur(1.5px); }
-@keyframes diceFloat {
-  0% { transform: translateY(0) rotate(0deg); }
-  25% { transform: translateY(-6px) rotate(3deg); }
-  50% { transform: translateY(0) rotate(0deg); }
-  75% { transform: translateY(4px) rotate(-2deg); }
-  100% { transform: translateY(0) rotate(0deg); }
+.dice-shaking { animation: diceSwing 0.4s ease-in-out infinite alternate; }
+@keyframes diceSwing {
+  0% { transform: rotate(-15deg); }
+  100% { transform: rotate(15deg); }
 }
-.dice-success { border-color: #3acc60 !important; color: #3acc60 !important; box-shadow: 0 0 20px rgba(58,204,96,0.4); animation: dicePulseGreen 0.5s; }
-.dice-fail { border-color: #ff4d4d !important; color: #ff4d4d !important; box-shadow: 0 0 20px rgba(255,77,77,0.4); animation: dicePulseRed 0.5s; }
-@keyframes dicePulseGreen { 0% { transform: scale(1.3); } 100% { transform: scale(1); } }
-@keyframes dicePulseRed { 0% { transform: scale(1.3); } 100% { transform: scale(1); } }
+.dice-success .dice-popup-dice { filter: drop-shadow(0 0 24px rgba(58,204,96,0.7)) drop-shadow(0 0 48px rgba(58,204,96,0.35)); animation: dicePulse 0.5s; }
+.dice-fail .dice-popup-dice { filter: drop-shadow(0 0 24px rgba(255,77,77,0.7)) drop-shadow(0 0 48px rgba(255,77,77,0.35)); animation: dicePulse 0.5s; }
+@keyframes dicePulse { 0% { transform: scale(1.2); } 100% { transform: scale(1); } }
 .dice-popup-dc { color: #999; font-size: 0.85rem; margin: 8px 0; }
 .dice-popup-result { margin: 12px 0; font-size: 1.1rem; font-weight: 600; }
 .dice-result-success { color: #3acc60; }

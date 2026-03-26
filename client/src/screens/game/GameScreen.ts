@@ -172,13 +172,55 @@ function buildHTML(isSolo: boolean): string {
 
   <!-- Action bar -->
   <div class="game-action-bar" id="action-bar">
-    <button class="action-btn" id="btn-search"><span class="action-icon">🔍</span><span class="action-label">РАЗВЕДКА</span></button>
+    ${!isSolo ? '<button class="action-btn" id="btn-marker"><span class="action-icon">📌</span><span class="action-label">МЕТКА</span></button>' : ''}
     <button class="action-btn action-btn--active" id="btn-move"><span class="action-icon">🚶</span><span class="action-label">ДВИЖЕНИЕ</span><span class="action-badge" id="move-badge">0</span></button>
     <button class="action-btn" id="btn-attack"><span class="action-icon">⚔️</span><span class="action-label">АТАКА</span></button>
     <button class="action-btn" id="btn-ability"><span class="action-icon">✨</span><span class="action-label">НАВЫК</span></button>
     <button class="action-btn" id="btn-item"><span class="action-icon">🎒</span><span class="action-label">ПРЕДМЕТ</span></button>
-    <button class="action-btn" id="btn-interact"><span class="action-icon">🤝</span><span class="action-label">ДЕЙСТВИЕ</span></button>
+    <div class="action-btn-dropdown-wrap">
+      <button class="action-btn" id="btn-interact"><span class="action-icon">🤝</span><span class="action-label">ДЕЙСТВИЕ</span></button>
+      <div class="action-dropdown" id="action-dropdown" style="display:none">
+        <button class="action-dd-item" id="dd-search">🔍 Разведка</button>
+        <button class="action-dd-item" id="dd-magic-vision" style="display:none">👁 Магическое зрение</button>
+        <button class="action-dd-item" id="dd-free-action">📝 Свободное действие</button>
+      </div>
+    </div>
     <button class="action-btn action-btn--end" id="btn-end-turn"><span class="action-icon">⏭</span><span class="action-label">КОНЕЦ ХОДА</span></button>
+  </div>
+
+  <!-- Marker popup (multiplayer only) -->
+  ${!isSolo ? `<div class="game-popup-overlay" id="marker-popup" style="display:none">
+    <div class="game-popup marker-popup-content">
+      <h3>Установить метку</h3>
+      <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:12px">Выберите тип метки и кликните на клетку карты</p>
+      <div class="marker-types" id="marker-types">
+        <button class="marker-type-btn marker-type-btn--active" data-marker="cross">✖</button>
+        <button class="marker-type-btn" data-marker="up">⬆</button>
+        <button class="marker-type-btn" data-marker="down">⬇</button>
+        <button class="marker-type-btn" data-marker="left">⬅</button>
+        <button class="marker-type-btn" data-marker="right">➡</button>
+      </div>
+      <div class="marker-visibility">
+        <label style="color:var(--text-dim);font-size:0.85rem">Кто видит:</label>
+        <div id="marker-vis-list" class="marker-vis-list"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+        <button class="popup-close" id="marker-cancel">Отмена</button>
+      </div>
+    </div>
+  </div>` : ''}
+
+  <!-- Free action popup -->
+  <div class="game-popup-overlay" id="free-action-popup" style="display:none">
+    <div class="game-popup">
+      <h3>Свободное действие</h3>
+      <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:12px">Опишите что хотите сделать. AI-мастер обработает ваше действие.</p>
+      <textarea id="free-action-text" class="free-action-textarea" rows="4" placeholder="Осмотреть стену на наличие скрытого прохода..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+        <button class="popup-close" id="free-action-cancel">Отмена</button>
+        <button class="dice-popup-btn" id="free-action-send">Выполнить</button>
+      </div>
+    </div>
   </div>
 
   <!-- Menu overlay -->
@@ -239,9 +281,9 @@ function buildHTML(isSolo: boolean): string {
 // ═══════════════════════════════════
 function onUpdate() {
   if (!gs) return;
+  updateHUD();   // update actionMode BEFORE rendering highlights
   renderMap();
   renderTeam();
-  updateHUD();
 }
 
 function updateHUD() {
@@ -355,7 +397,9 @@ function renderMap() {
       const monster = monsters?.find((m: any) => m.alive && (m.col === x && m.row === y));
       const showMonster = monster && !monster.friendly && (monster.discovered || fogV === 2);
       const friendlyNpc = !hero ? monsters?.find((n: any) => n.friendly && n.alive && n.col === x && n.row === y && (n.discovered || fogV === 2)) : null;
-      const obj = objects?.find((o: any) => (o.col === x && o.row === y) && (o.discovered !== false) && !o.opened && !o.triggered);
+      const rawObj = objects?.find((o: any) => (o.col === x && o.row === y) && (o.discovered !== false) && !o.opened && !o.triggered);
+      // Runes hidden until magical vision reveals them
+      const obj = rawObj && rawObj.type === 'rune' && !rawObj.revealed && !gs.runesRevealed ? null : rawObj;
 
       let cls = 'map-cell';
       if (isWall) cls += ' cell-wall';
@@ -369,7 +413,8 @@ function renderMap() {
       else if (fogV === 1) cls += ' fog-explored';
 
       // Highlights
-      if (myHero && actionMode === 'move' && !isWall && fogV > 0 && !hero && !showMonster) {
+      const steps = myHero?.stepsRemaining ?? myHero?.moveRange ?? 0;
+      if (myHero && actionMode === 'move' && steps > 0 && !isWall && fogV > 0 && !hero && !showMonster) {
         const reachable = gs.reachableCells;
         if (reachable && reachable.length > 0) {
           if (reachable.some((c: any) => c.row === y && c.col === x)) {
@@ -377,7 +422,7 @@ function renderMap() {
           }
         } else {
           const dist = Math.abs(myHero.col - x) + Math.abs(myHero.row - y);
-          if (dist > 0 && dist <= (myHero.stepsRemaining || myHero.moveRange || 2)) {
+          if (dist > 0 && dist <= steps) {
             cls += isObstacle ? ' cell-reachable-obstacle' : ' cell-reachable';
           }
         }
@@ -421,6 +466,12 @@ function renderMap() {
         content = imgSrc
           ? `<span class="token-object" title="${obj.name || obj.type}"><img src="${imgSrc}" alt="" onerror="this.parentElement.textContent='${icon}'" /></span>`
           : `<span class="token-object" title="${obj.name || obj.type}">${icon}</span>`;
+      }
+
+      // Markers (multiplayer)
+      const marker = gs.markers?.find((m: any) => m.col === x && m.row === y && (!m.visibleTo?.length || m.visibleTo.includes(user?._id) || m.visibleTo.includes('all')));
+      if (marker && fogV > 0) {
+        content += `<span class="map-marker" title="Метка">${marker.icon || '✖'}</span>`;
       }
 
       html += `<div class="${cls}" data-x="${x}" data-y="${y}">${content}</div>`;
@@ -470,6 +521,19 @@ function onCellClick(x: number, y: number) {
   if (!sock || !gs) return;
   const myHero = getMyHero();
   if (!myHero) return;
+
+  // Marker placing mode
+  if (markerPlacingMode) {
+    markerPlacingMode = false;
+    const MARKER_ICONS: Record<string, string> = { cross: '✖', up: '⬆', down: '⬇', left: '⬅', right: '➡' };
+    const marker = { type: selectedMarkerType, icon: MARKER_ICONS[selectedMarkerType] || '✖', col: x, row: y, owner: user?._id, visibleTo: markerVisibleTo };
+    sock.emit('place-marker', marker);
+    if (!gs.markers) gs.markers = [];
+    gs.markers.push(marker);
+    renderMap();
+    log(`📌 Метка «${marker.icon}» установлена на (${x},${y})`, 'system');
+    return;
+  }
 
   // Search mode — click anywhere triggers search
   if (actionMode === 'search') {
@@ -547,22 +611,115 @@ function statusIcon(type: string): string {
 // ═══════════════════════════════════
 // ACTION BAR
 // ═══════════════════════════════════
+function clearActiveBtn() { document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active')); }
+function setAction(mode: string, btnId: string) {
+  actionMode = mode;
+  clearActiveBtn();
+  document.getElementById(btnId)?.classList.add('action-btn--active');
+  if (gs) renderMap();
+}
+
 function setupActions(isSolo: boolean, isHost: boolean) {
-  const btns = ['search', 'move', 'attack', 'ability', 'item', 'interact'];
-  btns.forEach(id => {
-    document.getElementById(`btn-${id}`)?.addEventListener('click', () => {
-      if (id === 'ability') { showAbilityPopup(); return; }
-      if (id === 'item') { showItemPopup(); return; }
-      if (id === 'interact') { actionMode = 'interact'; document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active')); document.getElementById('btn-interact')?.classList.add('action-btn--active'); if (gs) renderMap(); return; }
-      if (id === 'search') { actionMode = 'search'; document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active')); document.getElementById('btn-search')?.classList.add('action-btn--active'); if (gs) renderMap(); return; }
-      actionMode = id;
-      document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active'));
-      document.getElementById(`btn-${id}`)?.classList.add('action-btn--active');
-      if (gs) renderMap(); // re-render highlights
+  // Simple mode buttons
+  document.getElementById('btn-move')?.addEventListener('click', () => setAction('move', 'btn-move'));
+  document.getElementById('btn-attack')?.addEventListener('click', () => setAction('attack', 'btn-attack'));
+  document.getElementById('btn-ability')?.addEventListener('click', () => showAbilityPopup());
+  document.getElementById('btn-item')?.addEventListener('click', () => showItemPopup());
+  document.getElementById('btn-end-turn')?.addEventListener('click', () => { sock?.emit('action-request', { type: 'end-turn' }); });
+
+  // ДЕЙСТВИЕ dropdown
+  const ddWrap = document.getElementById('action-dropdown')!;
+  document.getElementById('btn-interact')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const visible = ddWrap.style.display !== 'none';
+    ddWrap.style.display = visible ? 'none' : 'flex';
+    // Show magic vision if hero has it
+    const hero = getMyHero();
+    const hasMagicVision = hero && [...(hero.abilities || []), ...(hero.baseAbilities || [])].some((a: any) => a.abilityId === 'magic-vision' || a.abilityId === 'arcane-sight');
+    const mvBtn = document.getElementById('dd-magic-vision');
+    if (mvBtn) mvBtn.style.display = hasMagicVision ? 'flex' : 'none';
+  });
+
+  // Close dropdown on outside click
+  document.addEventListener('click', () => { ddWrap.style.display = 'none'; });
+  ddWrap.addEventListener('click', (e) => e.stopPropagation());
+
+  // Разведка
+  document.getElementById('dd-search')?.addEventListener('click', () => {
+    ddWrap.style.display = 'none';
+    setAction('search', 'btn-interact');
+    // Trigger search dice roll
+    showInteractiveDicePopup('d20', 'Разведка — бросьте кубик', 10, (roll) => {
+      sock?.emit('action-request', { type: 'search', roll });
     });
   });
-  document.getElementById('btn-end-turn')?.addEventListener('click', () => {
-    sock?.emit('action-request', { type: 'end-turn' });
+
+  // Магическое зрение
+  document.getElementById('dd-magic-vision')?.addEventListener('click', () => {
+    ddWrap.style.display = 'none';
+    showInteractiveDicePopup('d20', 'Магическое зрение — бросьте кубик', 12, (roll) => {
+      sock?.emit('action-request', { type: 'ability', abilityId: 'magic-vision', roll });
+    });
+  });
+
+  // Свободное действие
+  document.getElementById('dd-free-action')?.addEventListener('click', () => {
+    ddWrap.style.display = 'none';
+    const popup = document.getElementById('free-action-popup')!;
+    popup.style.display = 'flex';
+    const textarea = document.getElementById('free-action-text') as HTMLTextAreaElement;
+    textarea.value = '';
+    textarea.focus();
+  });
+  document.getElementById('free-action-cancel')?.addEventListener('click', () => {
+    document.getElementById('free-action-popup')!.style.display = 'none';
+  });
+  document.getElementById('free-action-send')?.addEventListener('click', () => {
+    const text = (document.getElementById('free-action-text') as HTMLTextAreaElement).value.trim();
+    if (!text) return;
+    document.getElementById('free-action-popup')!.style.display = 'none';
+    sock?.emit('action-request', { type: 'free-action', text });
+    log(`📝 Свободное действие: ${text}`, 'system');
+  });
+
+  // ─── MARKER (multiplayer only) ───
+  setupMarker();
+}
+
+let selectedMarkerType = 'cross';
+let markerPlacingMode = false;
+let markerVisibleTo: string[] = []; // empty = all
+
+function setupMarker() {
+  const markerBtn = document.getElementById('btn-marker');
+  if (!markerBtn) return; // solo mode — no marker
+
+  markerBtn.addEventListener('click', () => {
+    const popup = document.getElementById('marker-popup')!;
+    popup.style.display = 'flex';
+    // Populate visibility list from players
+    const visList = document.getElementById('marker-vis-list')!;
+    const players = gs?.heroes || [];
+    visList.innerHTML = `<label class="marker-vis-option"><input type="checkbox" value="all" checked /> Все</label>` +
+      players.map((h: any) => `<label class="marker-vis-option"><input type="checkbox" value="${h._ownerId || h.userId}" /> ${h.name}</label>`).join('');
+  });
+
+  document.getElementById('marker-cancel')?.addEventListener('click', () => {
+    document.getElementById('marker-popup')!.style.display = 'none';
+    markerPlacingMode = false;
+  });
+
+  // Marker type selection
+  document.getElementById('marker-types')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.marker-type-btn') as HTMLElement;
+    if (!btn) return;
+    document.querySelectorAll('.marker-type-btn').forEach(b => b.classList.remove('marker-type-btn--active'));
+    btn.classList.add('marker-type-btn--active');
+    selectedMarkerType = btn.dataset.marker || 'cross';
+    // Enter placing mode
+    markerPlacingMode = true;
+    document.getElementById('marker-popup')!.style.display = 'none';
+    log(`📌 Кликните на клетку для установки метки`, 'system');
   });
 }
 

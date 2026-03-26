@@ -209,6 +209,10 @@ class GameEngine {
         return this.validateInteract(hero, action);
       case 'search':
         return this.validateSearch(hero, action);
+      case 'magic-vision':
+        return hero.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
+      case 'free-action':
+        return hero.bonusActionUsed ? { ok: false, error: 'Бонусное действие уже использовано' } : { ok: true };
       case 'end-turn':
         return { ok: true };
       default:
@@ -373,6 +377,12 @@ class GameEngine {
         break;
       case 'search':
         result = this.executeSearch(action);
+        break;
+      case 'magic-vision':
+        result = this.executeMagicVision(action);
+        break;
+      case 'free-action':
+        result = this.executeFreeAction(action);
         break;
       case 'end-turn':
         result = this.executeEndTurn();
@@ -893,6 +903,70 @@ class GameEngine {
           ? `<span class="dice-result-success">✅ d20=${roll}+${wisdomBonus}=${total} — Радиус ${radius}, найдено: ${discovered.length}</span>`
           : `<span class="dice-result-fail">❌ d20=${roll}+${wisdomBonus}=${total} — Почти ничего не видно</span>`,
       }],
+    };
+  }
+
+  // ============================================================
+  // MAGIC VISION — reveals runes on success
+  // ============================================================
+
+  executeMagicVision(action) {
+    const hero = this.findHero(action.heroId);
+    const MAGIC_VISION_DC = 12;
+    const roll = action.roll || this.rollDice(20);
+    const intBonus = hero.intellect || 0;
+    const total = roll + intBonus;
+    const success = total >= MAGIC_VISION_DC;
+
+    if (success) {
+      this.gs.runesRevealed = true;
+      for (const obj of this.gs.objects) {
+        if (obj.type === 'rune') {
+          obj.revealed = true;
+          obj.discovered = true;
+        }
+      }
+    }
+
+    hero.actionUsed = true;
+    this.gs.actionUsed = true;
+
+    this.addLog(`👁 ${hero.name} применяет магическое зрение (d20=${roll}+${intBonus}=${total} DC${MAGIC_VISION_DC}): ${success ? 'руны раскрыты!' : 'ничего не видно'}`, success ? 'log-action' : 'log-damage');
+
+    return {
+      type: 'magic-vision',
+      heroId: hero.id, heroName: hero.name,
+      roll, bonus: intBonus, total, success,
+      diceRolls: [{
+        diceType: 'd20', roll, bonus: intBonus,
+        label: '👁 Магическое зрение',
+        message: `${hero.name}: d20 + ИНТ(${intBonus}) ≥ DC${MAGIC_VISION_DC}`,
+        success,
+        resultText: success
+          ? `<span class="dice-result-success">✅ d20=${roll}+${intBonus}=${total} — Руны раскрыты!</span>`
+          : `<span class="dice-result-fail">❌ d20=${roll}+${intBonus}=${total} — Зрение затуманено</span>`,
+      }],
+    };
+  }
+
+  // ============================================================
+  // FREE ACTION — text processed by AI
+  // ============================================================
+
+  executeFreeAction(action) {
+    const hero = this.findHero(action.heroId);
+    const text = action.text || 'Свободное действие';
+
+    hero.bonusActionUsed = true;
+    this.gs.bonusActionUsed = true;
+
+    this.addLog(`📝 ${hero.name}: ${text}`, 'log-action');
+
+    return {
+      type: 'free-action',
+      heroId: hero.id, heroName: hero.name,
+      text,
+      needsAI: true,
     };
   }
 
