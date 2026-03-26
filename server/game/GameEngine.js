@@ -218,6 +218,8 @@ class GameEngine {
         if (dist > NPC_INTERACT_RANGE) return { ok: false, error: 'Слишком далеко' };
         return { ok: true };
       }
+      case 'sneak':
+        return this.gs.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
       case 'eavesdrop':
         return this.gs.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
       case 'magic-vision':
