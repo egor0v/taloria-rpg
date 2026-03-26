@@ -213,6 +213,8 @@ class GameEngine {
         return hero.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
       case 'free-action':
         return hero.bonusActionUsed ? { ok: false, error: 'Бонусное действие уже использовано' } : { ok: true };
+      case 'loot-chest':
+        return { ok: true }; // Always allow looting opened chest
       case 'end-turn':
         return { ok: true };
       default:
@@ -383,6 +385,9 @@ class GameEngine {
         break;
       case 'free-action':
         result = this.executeFreeAction(action);
+        break;
+      case 'loot-chest':
+        result = this.executeLootChest(action);
         break;
       case 'end-turn':
         result = this.executeEndTurn();
@@ -971,6 +976,57 @@ class GameEngine {
   }
 
   // ============================================================
+  // LOOT CHEST — pick specific items or all
+  // ============================================================
+
+  executeLootChest(action) {
+    const hero = this.findHero(action.heroId);
+    const chestId = action.chestId;
+    const takeAll = action.takeAll;
+    const takeIndices = action.takeIndices || []; // array of item indices to take
+
+    const obj = this.gs.objects.find(o => o.id === chestId);
+    if (!obj || !obj.loot) return { type: 'loot-chest', success: false, message: 'Сундук не найден' };
+
+    const loot = obj.loot;
+    const takenItems = [];
+
+    if (takeAll) {
+      // Take everything
+      if (loot.silver) hero.silver = (hero.silver || 0) + loot.silver;
+      if (loot.gold) hero.gold = (hero.gold || 0) + loot.gold;
+      if (loot.items) {
+        loot.items.forEach(item => { hero.inventory.push(item); takenItems.push(item.name); });
+      }
+      obj.opened = true;
+      obj.loot = null;
+    } else {
+      // Take specific items by index
+      const sorted = [...takeIndices].sort((a, b) => b - a); // reverse to safely splice
+      sorted.forEach(idx => {
+        if (loot.items && loot.items[idx]) {
+          const item = loot.items.splice(idx, 1)[0];
+          hero.inventory.push(item);
+          takenItems.push(item.name);
+        }
+      });
+      // Always take silver/gold
+      if (loot.silver) { hero.silver = (hero.silver || 0) + loot.silver; loot.silver = 0; }
+      if (loot.gold) { hero.gold = (hero.gold || 0) + loot.gold; loot.gold = 0; }
+      // If all items taken, mark chest as fully looted
+      if (!loot.items || loot.items.length === 0) {
+        obj.opened = true;
+        obj.loot = null;
+      }
+    }
+
+    const msg = takenItems.length > 0 ? `${hero.name} забирает: ${takenItems.join(', ')}` : `${hero.name} забирает серебро`;
+    this.addLog(`📦 ${msg}`, 'log-loot');
+
+    return { type: 'loot-chest', heroId: hero.id, heroName: hero.name, takenItems, message: msg };
+  }
+
+  // ============================================================
   // VALIDATE & EXECUTE: INTERACT (chests, runes, traps)
   // ============================================================
 
@@ -995,14 +1051,14 @@ class GameEngine {
 
     switch (obj.type) {
       case 'chest': {
-        obj.opened = true;
-        const loot = LootGenerator.generateChestLoot ? LootGenerator.generateChestLoot('normal') : { items: [], silver: 10 };
+        // Generate loot but DON'T auto-add to inventory — let client choose
+        const loot = LootGenerator.generateChestLoot ? LootGenerator.generateChestLoot(obj.chestType || 'normal') : { items: [], silver: 10 };
+        obj.loot = loot; // Store loot on the object for later pickup
+        obj.openedBy = hero.id;
         result.loot = loot;
-        result.message = `${hero.name} открывает сундук! ${loot.items?.length ? loot.items.map(i => i.name).join(', ') : ''} ${loot.silver ? '+' + loot.silver + ' серебра' : ''}`;
-        // Add loot to hero
-        if (loot.silver) hero.silver = (hero.silver || 0) + loot.silver;
-        if (loot.gold) hero.gold = (hero.gold || 0) + loot.gold;
-        if (loot.items) loot.items.forEach(item => hero.inventory.push(item));
+        result.showChestPopup = true; // Flag for client to show chest UI
+        result.chestId = obj.id;
+        result.message = `${hero.name} открывает сундук!`;
         this.addLog(`📦 ${result.message}`, 'log-loot');
         break;
       }

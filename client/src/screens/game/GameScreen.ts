@@ -82,6 +82,8 @@ export function renderGameScreen(container: HTMLElement): void {
     }
     // All other dice rolls — animated display of server result
     if (rolls.length > 0) { showDiceRollSequence(rolls); }
+    // Chest popup
+    if (data.result?.showChestPopup) { showChestLootPopup(data.result.chestId, data.result.loot); }
   });
   sock.on('action-error', (data: any) => log(`❌ ${data.error || data.message || 'Ошибка'}`, 'error'));
   sock.on('ai-narration', (data: any) => { setNarration(data.text); log(`📜 ${data.text}`, 'narration'); });
@@ -209,6 +211,19 @@ function buildHTML(isSolo: boolean): string {
       </div>
     </div>
   </div>` : ''}
+
+  <!-- Chest loot popup -->
+  <div class="game-popup-overlay" id="chest-popup" style="display:none">
+    <div class="game-popup chest-popup-content">
+      <h3>📦 Содержимое сундука</h3>
+      <div id="chest-silver" class="chest-silver"></div>
+      <div id="chest-items" class="chest-items-list"></div>
+      <div class="chest-popup-actions">
+        <button class="dice-popup-btn" id="chest-take-all">Забрать всё</button>
+        <button class="popup-close" id="chest-close">Закрыть</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Free action popup -->
   <div class="game-popup-overlay" id="free-action-popup" style="display:none">
@@ -1299,4 +1314,64 @@ function fmtAction(data: any): string {
     case 'combat-start': return `⚔ БОЙ! Порядок: ${r.turnOrder?.map((t: any) => t.name).join(' → ')}`;
     default: return `⚡ ${r.type || data.action?.type || 'Действие'}`;
   }
+}
+
+// ═══════════════════════════════════
+// CHEST LOOT POPUP
+// ═══════════════════════════════════
+function showChestLootPopup(chestId: string, loot: any) {
+  const popup = document.getElementById('chest-popup')!;
+  const silverEl = document.getElementById('chest-silver')!;
+  const itemsEl = document.getElementById('chest-items')!;
+
+  const silver = loot?.silver || 0;
+  const gold = loot?.gold || 0;
+  const items = loot?.items || [];
+
+  silverEl.innerHTML = (silver ? `<span>💰 ${silver} серебра</span>` : '') + (gold ? ` <span>🪙 ${gold} золота</span>` : '');
+
+  itemsEl.innerHTML = items.length > 0 ? items.map((item: any, idx: number) => `
+    <div class="chest-item" data-idx="${idx}">
+      <span class="chest-item-icon">${item.img ? `<img src="${item.img}" alt="" class="chest-item-img"/>` : itemEmoji(item.type)}</span>
+      <div class="chest-item-info">
+        <span class="chest-item-name" style="color:${RARITY_COLORS[item.rarity] || '#e8e6e0'}">${item.name}</span>
+        <span class="chest-item-desc">${item.description || item.type || ''}</span>
+      </div>
+      <button class="chest-item-take" data-idx="${idx}">Забрать</button>
+    </div>
+  `).join('') : '<p style="color:var(--text-dim);text-align:center">Пусто</p>';
+
+  popup.style.display = 'flex';
+
+  // Individual take buttons
+  itemsEl.querySelectorAll('.chest-item-take').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt((btn as HTMLElement).dataset.idx || '0');
+      sock?.emit('action-request', { type: 'loot-chest', chestId, takeAll: false, takeIndices: [idx] });
+      // Remove item from popup
+      const row = btn.closest('.chest-item');
+      row?.remove();
+      items.splice(idx, 1);
+      // Re-index remaining
+      itemsEl.querySelectorAll('.chest-item').forEach((el, i) => {
+        (el as HTMLElement).dataset.idx = String(i);
+        const takeBtn = el.querySelector('.chest-item-take') as HTMLElement;
+        if (takeBtn) takeBtn.dataset.idx = String(i);
+      });
+      if (items.length === 0 && !silver && !gold) popup.style.display = 'none';
+      log(`📦 Предмет забран`, 'system');
+    });
+  });
+
+  // Take all
+  document.getElementById('chest-take-all')?.addEventListener('click', () => {
+    sock?.emit('action-request', { type: 'loot-chest', chestId, takeAll: true });
+    popup.style.display = 'none';
+    log(`📦 Всё забрано из сундука`, 'system');
+  });
+
+  // Close
+  document.getElementById('chest-close')?.addEventListener('click', () => {
+    popup.style.display = 'none';
+  });
 }
