@@ -233,6 +233,30 @@
 .chest-item-take:hover { background: rgba(58,204,96,0.25); border-color: #3acc60; }
 .chest-popup-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
+/* ─── Free action item popup ─── */
+.fai-textarea {
+  width: 100%; padding: 10px; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+  color: var(--text-primary, #e8e6e0); font-family: var(--font-body);
+  font-size: 0.9rem; resize: vertical; min-height: 60px;
+}
+.fai-textarea:focus { border-color: var(--gold, #c9a24e); outline: none; }
+
+/* ─── Transfer item popup ─── */
+.transfer-allies { display: flex; flex-direction: column; gap: 6px; }
+.transfer-ally-btn {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;
+  color: var(--text-primary, #e8e6e0); font-family: var(--font-body);
+  font-size: 0.9rem; cursor: pointer; transition: all 0.15s;
+}
+.transfer-ally-btn:hover { background: rgba(58,204,96,0.1); border-color: rgba(58,204,96,0.3); }
+.ginv-action-free { background: rgba(100,149,237,0.15) !important; border-color: rgba(100,149,237,0.3) !important; color: #6495ed !important; }
+.ginv-action-free:hover { background: rgba(100,149,237,0.25) !important; }
+.ginv-action-transfer { background: rgba(255,165,0,0.15) !important; border-color: rgba(255,165,0,0.3) !important; color: #ffa500 !important; }
+.ginv-action-transfer:hover { background: rgba(255,165,0,0.25) !important; }
+
 /* ─── Golden X close button on all popups ─── */
 .popup-x-close {
   position: absolute; top: 12px; right: 14px;

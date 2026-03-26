@@ -974,12 +974,10 @@ let abilityDefsCache: Record<string, any> = {};
 async function loadAbilityDefs() {
   if (Object.keys(abilityDefsCache).length > 0) return;
   try {
-    // Try multiple pages to get all abilities (API returns max 100 per page)
+    // Load all abilities via apiCall (handles auth + JSON parsing)
     let allItems: any[] = [];
     for (let page = 1; page <= 5; page++) {
-      const resp = await fetch(`/api/bestiary?tab=abilities&limit=100&page=${page}`);
-      if (!resp.ok) break;
-      const data = await resp.json();
+      const data = await apiCall(`/api/bestiary?tab=abilities&limit=100&page=${page}`);
       const items = data.data || [];
       if (items.length === 0) break;
       allItems = allItems.concat(items);
@@ -1292,6 +1290,8 @@ function showInGameItemPreview(item: any, source: string, idx: number) {
         ${isUsable && source === 'inventory' ? `<button class="ginv-action-btn ginv-action-use" data-idx="${idx}">🧪 Использовать</button>` : ''}
         ${canEquip ? `<button class="ginv-action-btn ginv-action-equip" data-idx="${idx}" data-slot="${item.slot}">⬆ Экипировать</button>` : ''}
         ${canUnequip ? `<button class="ginv-action-btn ginv-action-unequip">⬇ Снять</button>` : ''}
+        ${source === 'inventory' ? `<button class="ginv-action-btn ginv-action-free" data-idx="${idx}">💬 Свободное действие</button>` : ''}
+        ${source === 'inventory' && !isSoloSession() ? `<button class="ginv-action-btn ginv-action-transfer" data-idx="${idx}">🤝 Передать</button>` : ''}
       </div>
     </div>
   `;
@@ -1306,6 +1306,99 @@ function showInGameItemPreview(item: any, source: string, idx: number) {
   el.querySelector('.ginv-action-equip')?.addEventListener('click', () => {
     sock?.emit('action-request', { type: 'equip', itemIndex: idx, slot: item.slot });
     document.getElementById('inventory-overlay')!.style.display = 'none';
+  });
+
+  // Free action with item — describe what you do, AI master processes it
+  el.querySelector('.ginv-action-free')?.addEventListener('click', () => {
+    showFreeActionItemPopup(item, idx);
+  });
+
+  // Transfer to ally (multiplayer only)
+  el.querySelector('.ginv-action-transfer')?.addEventListener('click', () => {
+    showTransferItemPopup(item, idx);
+  });
+}
+
+function isSoloSession(): boolean {
+  return session?.maxPlayers === 1 || (gs?.heroes?.length || 0) <= 1;
+}
+
+function showFreeActionItemPopup(item: any, idx: number) {
+  const existing = document.getElementById('free-action-item-popup');
+  if (existing) existing.remove();
+
+  const popup = document.createElement('div');
+  popup.id = 'free-action-item-popup';
+  popup.className = 'game-popup-overlay';
+  popup.style.display = 'flex';
+  popup.innerHTML = `
+    <div class="game-popup">
+      <span class="popup-x-close" id="fai-close">✕</span>
+      <h3>💬 Действие с предметом: ${item.name || 'предмет'}</h3>
+      <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:12px">Опишите, что вы делаете с этим предметом. ИИ Мастер обработает ваше действие.</p>
+      <textarea id="fai-text" class="fai-textarea" placeholder="Например: Привязываю верёвку к камню и бросаю через пропасть..." rows="3"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="dice-popup-btn" id="fai-send">Выполнить</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(popup);
+
+  document.getElementById('fai-close')?.addEventListener('click', () => popup.remove());
+  popup.addEventListener('click', (e) => { if (e.target === popup) popup.remove(); });
+
+  document.getElementById('fai-send')?.addEventListener('click', () => {
+    const text = (document.getElementById('fai-text') as HTMLTextAreaElement).value.trim();
+    if (!text) return;
+    sock?.emit('action-request', { type: 'free-action', text: `[${item.name}] ${text}`, itemIndex: idx });
+    popup.remove();
+    document.getElementById('inventory-overlay')!.style.display = 'none';
+    log(`💬 Свободное действие: ${text}`, 'system');
+  });
+}
+
+function showTransferItemPopup(item: any, idx: number) {
+  const hero = getMyHero();
+  if (!hero || !gs) return;
+  // Get other heroes
+  const allies = gs.heroes.filter((h: any) => h.id !== hero.id && h.alive);
+  if (allies.length === 0) { log('❌ Нет доступных союзников', 'error'); return; }
+
+  const existing = document.getElementById('transfer-item-popup');
+  if (existing) existing.remove();
+
+  const popup = document.createElement('div');
+  popup.id = 'transfer-item-popup';
+  popup.className = 'game-popup-overlay';
+  popup.style.display = 'flex';
+  popup.innerHTML = `
+    <div class="game-popup">
+      <span class="popup-x-close" id="ti-close">✕</span>
+      <h3>🤝 Передать: ${item.name || 'предмет'}</h3>
+      <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:12px">Выберите кому передать:</p>
+      <div class="transfer-allies">
+        ${allies.map((a: any) => `
+          <button class="transfer-ally-btn" data-target-id="${a.id}">
+            <span>${a.name}</span>
+            <span style="color:var(--text-dim);font-size:0.75rem">${a.cls || ''} Lv${a.level || 1}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(popup);
+
+  document.getElementById('ti-close')?.addEventListener('click', () => popup.remove());
+  popup.addEventListener('click', (e) => { if (e.target === popup) popup.remove(); });
+
+  popup.querySelectorAll('.transfer-ally-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = (btn as HTMLElement).dataset.targetId;
+      sock?.emit('action-request', { type: 'transfer-item', itemIndex: idx, targetHeroId: targetId });
+      popup.remove();
+      document.getElementById('inventory-overlay')!.style.display = 'none';
+      log(`🤝 Передаём ${item.name} союзнику`, 'system');
+    });
   });
 }
 

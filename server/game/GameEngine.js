@@ -251,6 +251,8 @@ class GameEngine {
         return this.gs._pendingDamage ? { ok: true } : { ok: false, error: 'Нет ожидающего урона' };
       case 'loot-chest':
         return { ok: true };
+      case 'transfer-item':
+        return { ok: true };
       case 'end-turn':
         return { ok: true };
       default:
@@ -436,6 +438,9 @@ class GameEngine {
         break;
       case 'loot-chest':
         result = this.executeLootChest(action);
+        break;
+      case 'transfer-item':
+        result = this.executeTransferItem(action);
         break;
       case 'end-turn':
         result = this.executeEndTurn();
@@ -1220,6 +1225,30 @@ class GameEngine {
   // ============================================================
   // LOOT CHEST — pick specific items or all
   // ============================================================
+
+  executeTransferItem(action) {
+    const hero = this.findHero(action.heroId);
+    const targetHero = this.gs.heroes.find(h => h.id === action.targetHeroId);
+    if (!targetHero) return { type: 'transfer-item', success: false, message: 'Союзник не найден' };
+
+    const idx = action.itemIndex;
+    if (!hero.inventory || !hero.inventory[idx]) {
+      return { type: 'transfer-item', success: false, message: 'Предмет не найден' };
+    }
+
+    const item = hero.inventory.splice(idx, 1)[0];
+    if (!targetHero.inventory) targetHero.inventory = [];
+    targetHero.inventory.push(item);
+
+    // In combat this costs a bonus action; in explore it's free
+    if (this.gs.mode === 'combat') {
+      hero.bonusActionUsed = true;
+    }
+
+    const msg = `${hero.name} передаёт ${item.name || 'предмет'} → ${targetHero.name}`;
+    this.addLog(`🤝 ${msg}`, 'log-loot');
+    return { type: 'transfer-item', heroId: hero.id, targetHeroId: targetHero.id, itemName: item.name, message: msg };
+  }
 
   executeLootChest(action) {
     const hero = this.findHero(action.heroId);
