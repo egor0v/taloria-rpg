@@ -442,6 +442,53 @@ function setupGameHandler(io) {
       gameNsp.to(`session:${sessionId}`).emit('chat-message', msg);
     });
 
+    // --- NPC Dialog (AI master processes player message) ---
+    socket.on('npc-dialog', async (data) => {
+      const sessionId = socket.sessionId;
+      if (!sessionId || !data?.playerMessage) return;
+
+      const engine = activeGames.get(sessionId);
+      const npc = engine?.gs?.monsters?.find(m => m.id === data.npcId);
+      const npcName = npc?.name || data.npcName || 'НПС';
+      const npcType = npc?.type || 'npc';
+      const npcDialog = npc?.dialog || npc?.greeting || '';
+
+      try {
+        const aiMaster = require('../services/aiMaster');
+        const result = await aiMaster.generate({
+          type: 'npc-dialog',
+          npcName,
+          npcType,
+          npcBaseDialog: npcDialog,
+          npcFriendly: npc?.friendly || false,
+          npcIsTrader: npc?.isTrader || false,
+          npcIsQuestNpc: npc?.isQuestNpc || false,
+          playerMessage: data.playerMessage,
+          playerName: socket.displayName,
+          scenarioName: engine?.gs?.scenarioName || '',
+        });
+        socket.emit('npc-dialog-response', {
+          npcId: data.npcId,
+          npcName,
+          npcResponse: result.npcText || result.narration || `${npcName}: Хм... интересно.`,
+        });
+      } catch (err) {
+        console.error('NPC dialog AI error:', err);
+        // Fallback response based on NPC type
+        const fallbacks = {
+          trader: `${npcName}: Хочешь что-то купить? Посмотри мой товар.`,
+          quest: `${npcName}: Помоги мне, прошу!`,
+          default: `${npcName}: *кивает* Интересно...`,
+        };
+        const fallback = npc?.isTrader ? fallbacks.trader : npc?.isQuestNpc ? fallbacks.quest : fallbacks.default;
+        socket.emit('npc-dialog-response', {
+          npcId: data.npcId,
+          npcName,
+          npcResponse: fallback,
+        });
+      }
+    });
+
     // --- AI narration request ---
     socket.on('request-ai-narration', async ({ sessionId: reqSessionId, context }) => {
       const sessionId = reqSessionId || socket.sessionId;

@@ -264,6 +264,26 @@
 }
 .npc-dialog-option:hover { background: rgba(246,200,109,0.1); border-color: rgba(246,200,109,0.3); }
 .npc-dialog-trade { color: var(--gold, #f6c86d); border-color: rgba(246,200,109,0.2); }
+.npc-dialog-text { max-height: 250px; overflow-y: auto; }
+.npc-dialog-player { color: #5b8fff; font-weight: 600; margin: 6px 0 2px; }
+.npc-dialog-loading { color: var(--text-dim); font-style: italic; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+.npc-dialog-custom {
+  display: flex; gap: 6px; margin-top: 4px;
+}
+.npc-dialog-input {
+  flex: 1; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+  background: rgba(0,0,0,0.3); color: var(--text); font-size: 0.82rem;
+  font-family: var(--font-body); outline: none;
+}
+.npc-dialog-input:focus { border-color: rgba(246,200,109,0.4); }
+.npc-dialog-input::placeholder { color: var(--text-dim); }
+.npc-dialog-send {
+  padding: 8px 14px; background: var(--gold, #f6c86d); color: #1a1610; border: none;
+  border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: 700;
+  transition: opacity 0.15s;
+}
+.npc-dialog-send:hover { opacity: 0.85; }
 
 /* ─── Mission briefing popup ─── */
 .briefing-popup-content { min-width: 380px; max-width: 520px; padding: 24px 28px; }

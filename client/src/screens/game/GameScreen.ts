@@ -1450,30 +1450,110 @@ function showNpcDialogPopup(result: any) {
     ? `<p>${result.dialog}</p>`
     : `<p style="color:var(--text-dim);font-style:italic">${result.npcName} кивает вам.</p>`;
 
+  // Built-in dialog options
   let actionsHtml = '';
-  if (result.dialogTree?.length) {
-    actionsHtml = result.dialogTree.map((opt: any, i: number) =>
-      `<button class="npc-dialog-option" data-idx="${i}">${opt.text || opt.label}</button>`
+  const dialogOpts = result.dialogTree || [];
+  if (dialogOpts.length) {
+    actionsHtml += dialogOpts.map((opt: any, i: number) =>
+      `<button class="npc-dialog-option" data-dialog-idx="${i}">${opt.text || opt.label}</button>`
     ).join('');
   }
   if (result.isTrader) {
     actionsHtml += `<button class="npc-dialog-option npc-dialog-trade">🛒 Торговать</button>`;
   }
+  // Custom text input for AI master
+  actionsHtml += `
+    <div class="npc-dialog-custom">
+      <input type="text" class="npc-dialog-input" id="npc-custom-input" placeholder="Написать свой вариант..." maxlength="300" />
+      <button class="npc-dialog-send" id="npc-custom-send">➤</button>
+    </div>
+  `;
   actions.innerHTML = actionsHtml;
 
   popup.style.display = 'flex';
 
+  // Built-in dialog option click
+  actions.querySelectorAll('[data-dialog-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt((btn as HTMLElement).dataset.dialogIdx || '0');
+      const opt = dialogOpts[idx];
+      if (opt?.response) {
+        // Show NPC's response inline
+        text.innerHTML += `<p class="npc-dialog-player">🗣 ${opt.text || opt.label}</p><p>${opt.response}</p>`;
+        text.scrollTop = text.scrollHeight;
+      } else {
+        // Send to AI master for response
+        sendNpcDialogToAI(result.npcId, result.npcName, opt?.text || opt?.label || '', text);
+      }
+    });
+  });
+
   // Trade button
   actions.querySelector('.npc-dialog-trade')?.addEventListener('click', () => {
     popup.style.display = 'none';
-    // TODO: open in-game trade interface
     log(`🛒 Торговля с ${result.npcName} (в разработке)`, 'system');
   });
 
-  // X close handler
+  // Custom text send
+  const customInput = document.getElementById('npc-custom-input') as HTMLInputElement;
+  const customSend = document.getElementById('npc-custom-send');
+  const sendCustom = () => {
+    const msg = customInput?.value?.trim();
+    if (!msg) return;
+    customInput.value = '';
+    text.innerHTML += `<p class="npc-dialog-player">🗣 ${msg}</p>`;
+    text.scrollTop = text.scrollHeight;
+    sendNpcDialogToAI(result.npcId, result.npcName, msg, text);
+  };
+  customSend?.addEventListener('click', sendCustom);
+  customInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCustom(); });
+
+  // X close
   popup.querySelector('.popup-x-close')?.addEventListener('click', () => {
     popup.style.display = 'none';
   });
+}
+
+function sendNpcDialogToAI(npcId: string, npcName: string, playerMessage: string, textEl: HTMLElement) {
+  // Show loading
+  const loadingP = document.createElement('p');
+  loadingP.className = 'npc-dialog-loading';
+  loadingP.textContent = `${npcName} думает...`;
+  textEl.appendChild(loadingP);
+  textEl.scrollTop = textEl.scrollHeight;
+
+  // Send to server via socket
+  sock?.emit('npc-dialog', {
+    npcId,
+    npcName,
+    playerMessage,
+    sessionId: session?._id,
+  });
+
+  // Listen for AI response (one-time)
+  const handler = (data: any) => {
+    loadingP.remove();
+    const responseP = document.createElement('p');
+    responseP.innerHTML = data.npcResponse || `${npcName}: ...`;
+    textEl.appendChild(responseP);
+    textEl.scrollTop = textEl.scrollHeight;
+    log(`💬 ${npcName}: ${(data.npcResponse || '').slice(0, 80)}`, 'narration');
+    sock?.off('npc-dialog-response', handler);
+  };
+  sock?.on('npc-dialog-response', handler);
+
+  // Timeout fallback
+  setTimeout(() => {
+    if (loadingP.parentElement) {
+      loadingP.remove();
+      const fallback = document.createElement('p');
+      fallback.style.color = 'var(--text-dim)';
+      fallback.style.fontStyle = 'italic';
+      fallback.textContent = `${npcName} молча смотрит на вас.`;
+      textEl.appendChild(fallback);
+      sock?.off('npc-dialog-response', handler);
+    }
+  }, 15000);
 }
 
 // ═══════════════════════════════════
