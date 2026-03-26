@@ -2485,6 +2485,12 @@ GameEngine.initializeFromDB = async function (session) {
     }
   }
 
+  // ── Load all friendly NPC definitions from DB ──
+  const FriendlyNpc = require('../models/FriendlyNpc');
+  const allFriendlyNpcs = await FriendlyNpc.find({ active: true }).lean();
+  const npcLookup = {};
+  allFriendlyNpcs.forEach(n => { npcLookup[n.npcId] = n; if (n.name) npcLookup[n.name] = n; });
+
   // ── Spawn friendly NPCs from scenario (deduplicate with traders) ──
   const spawnedNpcKeys = new Set();
   if (scenario.friendlyNpcs && scenario.friendlyNpcs.length > 0) {
@@ -2492,25 +2498,32 @@ GameEngine.initializeFromDB = async function (session) {
       const row = npcDef.y ?? npcDef.row ?? 0;
       const col = npcDef.x ?? npcDef.col ?? 0;
       const key = `${row},${col}`;
-      if (spawnedNpcKeys.has(key)) return; // skip duplicates
+      if (spawnedNpcKeys.has(key)) return;
       spawnedNpcKeys.add(key);
+      // Look up full NPC definition from DB
+      const dbNpc = npcLookup[npcDef.npcId] || npcLookup[npcDef.name] || {};
       const npc = {
         id: `npc-${idx}`,
-        type: npcDef.type || 'npc',
-        name: npcDef.name || 'NPC',
-        label: npcDef.label || '🧝',
+        type: dbNpc.npcId || npcDef.type || 'npc',
+        name: dbNpc.name || npcDef.name || 'NPC',
+        label: dbNpc.label || npcDef.label || '🧝',
         row, col,
-        hp: npcDef.hp || 50,
-        maxHp: npcDef.hp || 50,
-        armor: 0, attack: 0, agility: 3,
+        hp: dbNpc.hp || npcDef.hp || DEFAULT_NPC_HP,
+        maxHp: dbNpc.hp || npcDef.hp || DEFAULT_NPC_HP,
+        armor: dbNpc.armor || 0, attack: dbNpc.attack || 0, agility: dbNpc.agility || 3,
         moveRange: 0, vision: 6, attackRange: 0,
-        canTalk: true,
+        canTalk: dbNpc.canTalk !== undefined ? dbNpc.canTalk : true,
         friendly: true,
-        alive: true,
-        aggro: false,
-        discovered: false,
-        dialogState: 'greeting',
-        statusEffects: [],
+        isTrader: dbNpc.isTrader || false,
+        isQuestNpc: dbNpc.isQuestNpc || false,
+        tokenImg: dbNpc.iconImg || dbNpc.tokenImg || '',
+        hoverImg: dbNpc.hoverImg || dbNpc.iconImg || '',
+        greeting: dbNpc.greeting || npcDef.dialog || '',
+        dialog: dbNpc.greeting || npcDef.dialog || '',
+        dialogTree: dbNpc.dialogTree || [],
+        description: dbNpc.description || '',
+        alive: true, aggro: false, discovered: false,
+        dialogState: 'greeting', statusEffects: [],
       };
       gs.monsters.push(npc);
     });
@@ -2523,26 +2536,28 @@ GameEngine.initializeFromDB = async function (session) {
       const row = trader.y ?? trader.row ?? 0;
       const col = trader.x ?? trader.col ?? 0;
       const key = `${row},${col}`;
-      if (spawnedNpcKeys.has(key)) return; // already spawned as friendlyNpc
+      if (spawnedNpcKeys.has(key)) return;
       spawnedNpcKeys.add(key);
       traderCount++;
+      const dbNpc = npcLookup[trader.npcId] || npcLookup[trader.name] || {};
       const traderMon = {
         id: `trader-${idx}`,
         type: 'trader',
-        name: trader.name || 'Торговец',
-        label: trader.label || '🧝',
+        name: dbNpc.name || trader.name || 'Торговец',
+        label: dbNpc.label || trader.label || '🧝',
         row, col,
-        hp: trader.hp || 10, maxHp: trader.hp || 10,
+        hp: dbNpc.hp || trader.hp || DEFAULT_TRADER_HP,
+        maxHp: dbNpc.hp || trader.hp || DEFAULT_TRADER_HP,
         armor: 0, attack: 0, agility: 2,
         moveRange: 0, vision: 3, attackRange: 0,
-        canTalk: true,
-        friendly: true,
-        isTrader: true,
-        alive: true,
-        aggro: false,
-        discovered: false,
-        dialogState: 'greeting',
-        statusEffects: [],
+        canTalk: true, friendly: true, isTrader: true,
+        tokenImg: dbNpc.iconImg || dbNpc.tokenImg || '',
+        hoverImg: dbNpc.hoverImg || dbNpc.iconImg || '',
+        greeting: dbNpc.greeting || '',
+        dialog: dbNpc.greeting || '',
+        dialogTree: dbNpc.dialogTree || [],
+        alive: true, aggro: false, discovered: false,
+        dialogState: 'greeting', statusEffects: [],
       };
       gs.monsters.push(traderMon);
     });
@@ -2596,23 +2611,25 @@ GameEngine.initializeFromDB = async function (session) {
       const key = `${row},${col}`;
       if (!spawnedNpcKeys.has(key)) {
         spawnedNpcKeys.add(key);
+        const dbNpc = npcLookup[qn.npcId] || npcLookup[qn.name] || {};
         gs.monsters.push({
           id: `quest-npc-${idx}`,
           type: 'quest-npc',
-          name: qn.name || 'NPC',
-          label: qn.label || '❗',
+          name: dbNpc.name || qn.name || 'NPC',
+          label: dbNpc.label || qn.label || '❗',
           row, col,
-          hp: qn.hp || 30, maxHp: qn.hp || 30,
+          hp: dbNpc.hp || qn.hp || DEFAULT_QUEST_NPC_HP,
+          maxHp: dbNpc.hp || qn.hp || DEFAULT_QUEST_NPC_HP,
           armor: 0, attack: 0, agility: 2,
           moveRange: 0, vision: 4, attackRange: 0,
-          canTalk: true,
-          friendly: true,
-          isQuestNpc: true,
-          alive: true,
-          aggro: false,
-          discovered: false,
-          dialogState: 'greeting',
-          statusEffects: [],
+          canTalk: true, friendly: true, isQuestNpc: true,
+          tokenImg: dbNpc.iconImg || dbNpc.tokenImg || '',
+          hoverImg: dbNpc.hoverImg || dbNpc.iconImg || '',
+          greeting: dbNpc.greeting || qn.dialog || '',
+          dialog: dbNpc.greeting || qn.dialog || '',
+          dialogTree: dbNpc.dialogTree || [],
+          alive: true, aggro: false, discovered: false,
+          dialogState: 'greeting', statusEffects: [],
         });
       }
     });
@@ -2753,6 +2770,7 @@ function _spawnMonster(def, idx, row, col, overrides) {
     abilities: def.abilities || [],
     canTalk: def.canTalk || false,
     tokenImg: def.tokenImg || '',
+    hoverImg: def.hoverImg || def.tokenImg || '',
     img: def.img || '',
     alive: true,
     aggro: false,
