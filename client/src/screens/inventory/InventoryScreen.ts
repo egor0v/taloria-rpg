@@ -342,13 +342,18 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
                   bonusHtml = `<span class="inv-stat-penalty">${totalBonus}</span>`;
                 }
 
+                const canUpgrade = (hero.skillPoints || 0) > 0;
                 return `<div class="inv-stat-row">
                   <span class="inv-stat-label">${label}</span>
                   <span class="inv-stat-val">${totalVal} ${bonusHtml}</span>
+                  ${canUpgrade ? `<button class="inv-stat-up-btn" data-stat="${key}" title="Потратить 1 очко навыка">+</button>` : ''}
                 </div>`;
               }).join('');
             })()}
+            ${(hero.skillPoints || 0) > 0 ? `<div class="inv-skill-points">🔹 Очков навыков: <strong>${hero.skillPoints}</strong></div>` : ''}
           </div>
+
+          ${hero.canLevelUp ? `<button class="inv-levelup-btn" id="btn-level-up">⬆ Повысить уровень (${hero.level} → ${hero.level + 1})</button>` : `<div class="inv-xp-bar-wrap"><div class="inv-xp-label">XP: ${hero.xp || 0}</div><div class="inv-xp-track"><div class="inv-xp-fill" style="width:${Math.min(100, Math.round((hero.xp || 0) / (hero.xpToNext || 100) * 100))}%"></div></div></div>`}
 
           <div class="inv-coins">
             <span class="inv-coin-gold">🪙 ${hero.gold || 0} зол.</span>
@@ -472,6 +477,46 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
     el.addEventListener('click', async () => {
       const abilityId = (el as HTMLElement).dataset.ability!;
       showAbilityDescription(abilityId);
+    });
+  });
+
+  // ===== LEVEL UP =====
+  document.getElementById('btn-level-up')?.addEventListener('click', async () => {
+    const token = localStorage.getItem('taloria_token');
+    try {
+      const res = await fetch(`/api/heroes/${hero._id}/level-up`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: '{}',
+      });
+      const data = await res.json();
+      if (data.hero) {
+        alert(`🎉 Уровень ${data.hero.level}!\n+${data.rewards?.hpBonus} HP\n+${data.rewards?.mpBonus} MP\n+2 очка навыков${data.rewards?.newAbility ? '\n🆕 Новая способность!' : ''}`);
+        renderInventoryScreen(container);
+      } else {
+        alert(data.error || 'Ошибка повышения уровня');
+      }
+    } catch { alert('Ошибка сети'); }
+  });
+
+  // ===== SPEND SKILL POINTS =====
+  body.querySelectorAll('.inv-stat-up-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const stat = (btn as HTMLElement).dataset.stat!;
+      const token = localStorage.getItem('taloria_token');
+      try {
+        const res = await fetch(`/api/heroes/${hero._id}/spend-skill-points`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ [stat]: 1 }),
+        });
+        const data = await res.json();
+        if (data.hero) {
+          renderInventoryScreen(container);
+        } else {
+          alert(data.error || 'Ошибка');
+        }
+      } catch { alert('Ошибка сети'); }
     });
   });
 
