@@ -1035,7 +1035,7 @@ class GameEngine {
     const { targetRow, targetCol } = action;
     if (targetRow === undefined || targetCol === undefined) return { ok: false, error: 'Не указана цель' };
     const dist = Math.abs(hero.row - targetRow) + Math.abs(hero.col - targetCol);
-    if (dist > 1) return { ok: false, error: 'Объект слишком далеко (макс. 1 клетка)' };
+    if (dist > NPC_INTERACT_RANGE) return { ok: false, error: `Объект слишком далеко (макс. ${NPC_INTERACT_RANGE} клетки)` };
     const obj = this.gs.objects.find(o => o.row === targetRow && o.col === targetCol && !o.opened && !o.triggered && !o.activated);
     if (!obj) return { ok: false, error: 'Нет объекта для взаимодействия' };
     return { ok: true };

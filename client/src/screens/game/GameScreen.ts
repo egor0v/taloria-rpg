@@ -571,9 +571,9 @@ function onCellClick(x: number, y: number) {
     return;
   }
 
-  // Click on object → interact (send coordinates for server)
+  // Click on object (chest, rune, trap) → interact automatically
   const obj = gs.objects?.find((o: any) => o.col === x && o.row === y && (o.discovered !== false) && !o.opened && !o.triggered && !o.activated);
-  if (obj && actionMode === 'interact') {
+  if (obj) {
     sock.emit('action-request', { type: 'interact', targetRow: y, targetCol: x, targetId: obj.id });
     return;
   }
