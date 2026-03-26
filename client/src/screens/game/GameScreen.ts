@@ -361,26 +361,16 @@ function updateHUD() {
   el('move-badge')!.textContent = String(steps);
   el('gold-display')!.textContent = String(myHero?.silver || myHero?.gold || 0);
 
-  // Disable only the specific action that was used
-  const moveUsed = myHero?.moveUsed || gs.moveUsed || steps <= 0;
+  // Disable action buttons based on usage (movement always allowed while steps remain)
   const actionUsed = myHero?.actionUsed || gs.actionUsed;
   const bonusUsed = myHero?.bonusActionUsed || gs.bonusActionUsed;
 
-  el('btn-move')?.classList.toggle('action-btn--disabled', !!moveUsed);
+  el('btn-move')?.classList.toggle('action-btn--disabled', steps <= 0);
   el('btn-attack')?.classList.toggle('action-btn--disabled', !!actionUsed);
   el('btn-search')?.classList.toggle('action-btn--disabled', !!actionUsed);
   el('btn-ability')?.classList.toggle('action-btn--disabled', !!actionUsed);
   el('btn-item')?.classList.toggle('action-btn--disabled', !!bonusUsed);
   el('btn-interact')?.classList.toggle('action-btn--disabled', !!bonusUsed);
-
-  // Auto-switch from disabled mode to first available
-  if (moveUsed && actionMode === 'move') {
-    if (!actionUsed) actionMode = 'attack';
-    else if (!bonusUsed) actionMode = 'interact';
-    else actionMode = 'move'; // all used
-    document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('action-btn--active'));
-    document.getElementById(`btn-${actionMode}`)?.classList.add('action-btn--active');
-  }
 
   // Show "no actions left" popup when all actions exhausted
   if (moveUsed && actionUsed && bonusUsed && !document.querySelector('.no-actions-popup')) {
@@ -476,7 +466,7 @@ function renderMap() {
 
       // Highlights
       const steps = myHero?.stepsRemaining ?? myHero?.moveRange ?? 0;
-      if (myHero && actionMode === 'move' && steps > 0 && !isWall && fogV > 0 && !hero && !showMonster) {
+      if (myHero && steps > 0 && !isWall && fogV > 0 && !hero && !showMonster) {
         const reachable = gs.reachableCells;
         if (reachable && reachable.length > 0) {
           if (reachable.some((c: any) => c.row === y && c.col === x)) {
@@ -636,8 +626,10 @@ function onCellClick(x: number, y: number) {
     return;
   }
 
-  // Move (send x/y, server translates to targetRow/targetCol)
-  if (actionMode === 'move') {
+  // Move — always available while steps remain (no need to select "move" mode)
+  const myH = getMyHero();
+  const stepsLeft = myH?.stepsRemaining ?? myH?.moveRange ?? 0;
+  if (stepsLeft > 0) {
     sock.emit('action-request', { type: 'move', x, y });
   }
 }
