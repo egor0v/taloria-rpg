@@ -61,7 +61,7 @@ const heroSchema = new mongoose.Schema(
     weaponChosen: { type: Boolean, default: false },
     abilityChosen: { type: Boolean, default: false },
 
-    missionCompletions: { type: Number, default: 0 },
+    missionCompletions: { type: mongoose.Schema.Types.Mixed, default: {} },
     unlockedAbilities: { type: [mongoose.Schema.Types.Mixed], default: [] },
   },
   {
