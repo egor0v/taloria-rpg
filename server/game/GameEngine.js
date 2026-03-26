@@ -440,6 +440,29 @@ class GameEngine {
     const fromRow = hero.row;
     const fromCol = hero.col;
 
+    // Opportunity attack: if in combat and leaving a melee-adjacent enemy
+    let opportunityAttack = null;
+    if (this.gs.mode === 'combat') {
+      const adjacentEnemy = this.gs.monsters.find(m =>
+        m.hp > 0 && !m.friendly && !m.fled &&
+        chebyshevDist(fromRow, fromCol, m.row, m.col) <= 1
+      );
+      if (adjacentEnemy) {
+        // Enemy gets free attack on hero
+        const oppRoll = this.rollDice(20);
+        const heroArmor = this.getEntityArmor(hero);
+        if (oppRoll > heroArmor) {
+          const oppDmg = Math.max(1, (adjacentEnemy.attack || 3) + this.rollDice(4) - (hero.armor || 0));
+          applyDamage(hero, oppDmg);
+          this.addLog(`⚡ ${adjacentEnemy.name} наносит ответную атаку: ${oppDmg} урона! (d20=${oppRoll})`, 'log-damage');
+          opportunityAttack = { attackerName: adjacentEnemy.name, d20: oppRoll, damage: oppDmg, heroHp: hero.hp };
+        } else {
+          this.addLog(`⚡ ${adjacentEnemy.name} пытается атаковать — промах! (d20=${oppRoll} ≤ ${heroArmor})`, 'log-action');
+          opportunityAttack = { attackerName: adjacentEnemy.name, d20: oppRoll, damage: 0, missed: true };
+        }
+      }
+    }
+
     // Calculate path for animation
     const path = this.findPath(hero.row, hero.col, action.targetRow, action.targetCol, hero.id);
     const stepsTaken = path.length > 0 ? path.length - 1 : 1;
@@ -507,6 +530,7 @@ class GameEngine {
         combatMonsters: this.gs.combatMonsters,
       } : {}),
       stepsRemaining: hero.stepsRemaining,
+      opportunityAttack,
     };
   }
 
@@ -662,12 +686,30 @@ class GameEngine {
     let combatEnded = null;
     if (this.gs.mode === 'combat') combatEnded = this.checkCombatEnd();
 
+    // Counter-attack: if target is alive, adjacent (melee), and not stunned
+    let counterAttack = null;
+    if (!killed && hero && target.hp > 0 && !target.friendly &&
+        chebyshevDist(hero.row, hero.col, target.row, target.col) <= 1 &&
+        !hasStatus(target, 'stun') && !hasStatus(target, 'frozen')) {
+      const counterRoll = this.rollDice(20);
+      const heroArmor = this.getEntityArmor(hero);
+      if (counterRoll > heroArmor) {
+        const counterDmg = Math.max(1, (target.attack || 3) + this.rollDice(4) - (hero.armor || 0));
+        applyDamage(hero, counterDmg);
+        this.addLog(`↩ ${target.name} контратакует: ${counterDmg} урона! (d20=${counterRoll})`, 'log-damage');
+        counterAttack = { attackerName: target.name, d20: counterRoll, damage: counterDmg, heroHp: hero.hp };
+      } else {
+        this.addLog(`↩ ${target.name} контратакует — промах! (d20=${counterRoll} ≤ ${heroArmor})`, 'log-action');
+        counterAttack = { attackerName: target.name, d20: counterRoll, damage: 0, missed: true };
+      }
+    }
+
     return {
       type: 'resolve-damage', heroId: pending.heroId, heroName,
       targetId: target.id, targetName: target.name,
       rolls, dmgRoll, attackBonus: pending.attackBonus, finalDmg,
       isCrit: pending.isCrit, targetHp: target.hp, targetMaxHp: target.maxHp,
-      targetAlive: target.hp > 0, killed, combatEnded,
+      targetAlive: target.hp > 0, killed, combatEnded, counterAttack,
     };
   }
 
