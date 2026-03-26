@@ -89,39 +89,50 @@ async function render() {
       <div class="lavka-content">
 
         <!-- Subscriptions -->
-        ${subscriptions.length ? `
-        <section class="lavka-section" id="section-subscriptions">
-          <div class="lavka-sub-cards">
-            ${subscriptions.map((item: any) => {
-              const tier = item.subscriptionTier || '';
-              const tierLabels: Record<string, string> = { stranger: 'Странник', seeker: 'Искатель', legend: 'Легенда' };
-              const tierColors: Record<string, string> = { stranger: '#9D9D9D', seeker: '#A335EE', legend: '#FF8000' };
-              const price = (item.priceKopecks / 100).toLocaleString('ru');
-              const months = item.subscriptionPeriodMonths || 1;
-              const features: Record<string, string[]> = {
-                stranger: ['1 карта в месяц', '+1 дополнительный слот героя', 'Бонусные предметы при входе', 'Значок «Странник» в профиле'],
-                seeker: ['3 карты в месяц', '+2 дополнительных слота героев', 'Расширенные бонусы при входе', 'Значок «Искатель» в профиле', 'Приоритет в подборе команды'],
-                legend: ['6 карт в месяц', 'Безлимитные слоты героев', 'Все бонусы при входе', 'Золотой значок «Легенда»', 'Эксклюзивные косметические предметы', 'Ранний доступ к новому контенту'],
-              };
-              const isRecommended = tier === 'seeker';
-              return `
-                <div class="lavka-sub-card ${isRecommended ? 'lavka-sub-card--recommended' : ''}">
-                  ${isRecommended ? '<div class="lavka-badge lavka-badge--purple">РЕКОМЕНДУЕМ</div>' : ''}
-                  ${item.badge && !isRecommended ? `<div class="lavka-badge">${item.badge}</div>` : ''}
-                  <h3 class="lavka-sub-tier" style="color:${tierColors[tier] || 'var(--gold)'}">${tierLabels[tier] || item.title}</h3>
-                  <p class="lavka-sub-desc">${item.description || ''}</p>
-                  <div class="lavka-sub-price">${price} ₽</div>
-                  <div class="lavka-sub-period">за ${months} ${months === 1 ? 'месяц' : months < 5 ? 'месяца' : 'месяцев'}</div>
-                  <ul class="lavka-sub-features">
-                    ${(features[tier] || []).map(f => `<li>✦ ${f}</li>`).join('')}
-                  </ul>
-                  <button class="lavka-buy-btn" data-slug="${item.slug}">${item.owned ? '✅ Активна' : 'Оформить'}</button>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </section>
-        ` : ''}
+        ${subscriptions.length ? (() => {
+          const tierLabels: Record<string, string> = { stranger: 'Странник', seeker: 'Искатель', legend: 'Легенда' };
+          const tierColors: Record<string, string> = { stranger: '#9D9D9D', seeker: '#A335EE', legend: '#FF8000' };
+          const features: Record<string, string[]> = {
+            stranger: ['1 карта в месяц', '+1 дополнительный слот героя', 'Бонусные предметы при входе', 'Значок «Странник» в профиле'],
+            seeker: ['3 карты в месяц', '+2 дополнительных слота героев', 'Расширенные бонусы при входе', 'Значок «Искатель» в профиле', 'Приоритет в подборе команды'],
+            legend: ['6 карт в месяц', 'Безлимитные слоты героев', 'Все бонусы при входе', 'Золотой значок «Легенда»', 'Эксклюзивные косметические предметы', 'Ранний доступ к новому контенту'],
+          };
+          const periodLabels: Record<number, string> = { 1: '1 месяц', 3: '3 месяца', 6: '6 месяцев', 12: '12 месяцев' };
+          // Get unique periods sorted
+          const periods = [...new Set(subscriptions.map((s: any) => s.subscriptionPeriodMonths || 1))].sort((a, b) => a - b);
+          const renderCard = (item: any) => {
+            const tier = item.subscriptionTier || '';
+            const price = (item.priceKopecks / 100).toLocaleString('ru');
+            const months = item.subscriptionPeriodMonths || 1;
+            const isRecommended = tier === 'seeker';
+            return `
+              <div class="lavka-sub-card ${isRecommended ? 'lavka-sub-card--recommended' : ''}">
+                ${isRecommended ? '<div class="lavka-badge lavka-badge--purple">РЕКОМЕНДУЕМ</div>' : ''}
+                ${item.badge && !isRecommended ? `<div class="lavka-badge">${item.badge}</div>` : ''}
+                <h3 class="lavka-sub-tier" style="color:${tierColors[tier] || 'var(--gold)'}">${tierLabels[tier] || item.title}</h3>
+                <p class="lavka-sub-desc">${item.description || ''}</p>
+                <div class="lavka-sub-price">${price} ₽</div>
+                <div class="lavka-sub-period">за ${months} ${months === 1 ? 'месяц' : months < 5 ? 'месяца' : 'месяцев'}</div>
+                <ul class="lavka-sub-features">
+                  ${(features[tier] || []).map(f => `<li>✦ ${f}</li>`).join('')}
+                </ul>
+                <button class="lavka-buy-btn" data-slug="${item.slug}">${item.owned ? '✅ Активна' : 'Оформить'}</button>
+              </div>
+            `;
+          };
+          return `
+          <section class="lavka-section" id="section-subscriptions">
+            ${periods.length > 1 ? `
+            <div class="lavka-sub-period-tabs">
+              ${periods.map((p, i) => `<button class="lavka-sub-period-tab ${i === 0 ? 'lavka-sub-period-tab--active' : ''}" data-period="${p}">${periodLabels[p] || p + ' мес.'}</button>`).join('')}
+            </div>` : ''}
+            ${periods.map((p, i) => `
+              <div class="lavka-sub-cards lavka-sub-period-group" data-period="${p}" style="${i > 0 ? 'display:none' : ''}">
+                ${subscriptions.filter((s: any) => (s.subscriptionPeriodMonths || 1) === p).map(renderCard).join('')}
+              </div>
+            `).join('')}
+          </section>`;
+        })() : ''}
 
         <!-- Maps -->
         ${maps.length ? `
@@ -248,6 +259,20 @@ async function render() {
 
   document.querySelectorAll('.lavka-section').forEach(s => observer.observe(s));
 
+  // Subscription period tabs
+  document.querySelectorAll('.lavka-sub-period-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const period = (tab as HTMLElement).dataset.period!;
+      // Activate tab
+      document.querySelectorAll('.lavka-sub-period-tab').forEach(t => t.classList.remove('lavka-sub-period-tab--active'));
+      tab.classList.add('lavka-sub-period-tab--active');
+      // Show/hide groups
+      document.querySelectorAll('.lavka-sub-period-group').forEach(g => {
+        (g as HTMLElement).style.display = (g as HTMLElement).dataset.period === period ? '' : 'none';
+      });
+    });
+  });
+
   // Buy buttons
   document.querySelectorAll('.lavka-buy-btn[data-slug]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -352,6 +377,12 @@ function addLavkaStyles() {
     .lavka-section-title { font-family: var(--font-heading); font-size: 1.4rem; color: var(--gold); margin-bottom: 24px; }
 
     /* Subscription Cards */
+    /* Subscription period tabs */
+    .lavka-sub-period-tabs { display: flex; gap: 4px; margin-bottom: 20px; background: rgba(255,255,255,0.03); border-radius: 8px; padding: 4px; }
+    .lavka-sub-period-tab { flex: 1; padding: 10px 16px; background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text-dim); font-family: var(--font-body); font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; }
+    .lavka-sub-period-tab:hover { color: var(--gold); background: rgba(201,162,78,0.06); }
+    .lavka-sub-period-tab--active { background: rgba(201,162,78,0.12); border-color: rgba(201,162,78,0.3); color: var(--gold); }
+
     .lavka-sub-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
     .lavka-sub-card { background: linear-gradient(180deg, rgba(20,18,14,0.95), rgba(14,12,10,0.98)); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 32px 24px; text-align: center; position: relative; transition: border-color 0.3s; display: flex; flex-direction: column; }
     .lavka-sub-card:hover { border-color: rgba(201,162,78,0.3); }
