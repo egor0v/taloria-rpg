@@ -7,7 +7,7 @@ const bestiaryQuerySchema = z.object({
     rarity: z.enum(['common', 'uncommon', 'rare', 'epic', 'legendary']).optional(),
     cls: z.enum(['warrior', 'mage', 'priest', 'bard']).optional(),
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
+    limit: z.coerce.number().int().min(1).max(500).default(50),
   }),
 });
 
