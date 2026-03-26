@@ -218,10 +218,14 @@ class GameEngine {
         if (dist > NPC_INTERACT_RANGE) return { ok: false, error: 'Слишком далеко' };
         return { ok: true };
       }
+      case 'eavesdrop':
+        return this.gs.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
+      case 'magic-vision':
+        return this.gs.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
       case 'free-action':
         return hero.bonusActionUsed ? { ok: false, error: 'Бонусное действие уже использовано' } : { ok: true };
       case 'loot-chest':
-        return { ok: true }; // Always allow looting opened chest
+        return { ok: true };
       case 'end-turn':
         return { ok: true };
       default:
@@ -392,6 +396,12 @@ class GameEngine {
         break;
       case 'talk':
         result = this.executeTalk(action);
+        break;
+      case 'sneak':
+        result = this.executeSneak(action);
+        break;
+      case 'eavesdrop':
+        result = this.executeEavesdrop(action);
         break;
       case 'free-action':
         result = this.executeFreeAction(action);
@@ -918,6 +928,85 @@ class GameEngine {
           ? `<span class="dice-result-success">✅ d20=${roll}+${wisdomBonus}=${total} — Радиус ${radius}, найдено: ${discovered.length}</span>`
           : `<span class="dice-result-fail">❌ d20=${roll}+${wisdomBonus}=${total} — Почти ничего не видно</span>`,
       }],
+    };
+  }
+
+  // ============================================================
+  // SNEAK — stealth mode, reduces enemy detection
+  // ============================================================
+
+  executeSneak(action) {
+    const hero = this.findHero(action.heroId);
+    const SNEAK_DC = 12;
+    const roll = action.roll || this.rollDice(20);
+    const agiBonus = Math.floor(((hero.agility || 0) - 10) / 2);
+    const total = roll + agiBonus;
+    const success = total >= SNEAK_DC;
+
+    if (success) {
+      applyStatus(hero, 'stealth', { duration: 3 });
+      this.addLog(`🥷 ${hero.name} успешно крадётся! Скрытность на 3 хода`, 'log-action');
+    } else {
+      // Alert nearby enemies
+      const nearbyMonsters = this.gs.monsters.filter(m => m.alive && !m.friendly && Math.abs(m.row - hero.row) + Math.abs(m.col - hero.col) <= ENCOUNTER_RANGE);
+      nearbyMonsters.forEach(m => { m.aggro = true; m.discovered = true; });
+      this.addLog(`🥷 ${hero.name} замечен! ${nearbyMonsters.length} врагов насторожились`, 'log-damage');
+    }
+
+    hero.actionUsed = true;
+    this.gs.actionUsed = true;
+
+    return {
+      type: 'sneak', heroId: hero.id, heroName: hero.name,
+      roll, bonus: agiBonus, total, dc: SNEAK_DC, success,
+      diceRolls: [{ diceType: 'd20', roll, bonus: agiBonus, label: '🥷 Скрытность',
+        message: `${hero.name}: d20 + ЛОВ(${agiBonus}) ≥ DC${SNEAK_DC}`, success }],
+    };
+  }
+
+  // ============================================================
+  // EAVESDROP — listen to nearby NPCs/monsters for intel
+  // ============================================================
+
+  executeEavesdrop(action) {
+    const hero = this.findHero(action.heroId);
+    const EAVESDROP_DC = 10;
+    const roll = action.roll || this.rollDice(20);
+    const wisBonus = Math.floor(((hero.wisdom || 0) - 10) / 2);
+    const total = roll + wisBonus;
+    const success = total >= EAVESDROP_DC;
+
+    let info = '';
+    if (success) {
+      // Find nearby enemies and reveal info
+      const nearby = this.gs.monsters.filter(m => m.alive && !m.friendly &&
+        Math.abs(m.row - hero.row) + Math.abs(m.col - hero.col) <= SEARCH_RADIUS);
+      if (nearby.length > 0) {
+        nearby.forEach(m => { m.discovered = true; });
+        const names = nearby.map(m => `${m.name} (HP:${m.hp})`).join(', ');
+        info = `Рядом: ${names}`;
+        this.addLog(`👂 ${hero.name} подслушивает: ${info}`, 'log-action');
+      } else {
+        info = 'Тишина... врагов поблизости нет';
+        this.addLog(`👂 ${hero.name}: тишина рядом`, 'log-action');
+      }
+      // Also reveal hidden objects
+      this.gs.objects.filter(o => !o.discovered &&
+        Math.abs(o.row - hero.row) + Math.abs(o.col - hero.col) <= SEARCH_RADIUS
+      ).forEach(o => { o.discovered = true; });
+    } else {
+      info = 'Не удалось ничего расслышать';
+      this.addLog(`👂 ${hero.name} ничего не услышал`, 'log-damage');
+    }
+
+    hero.actionUsed = true;
+    this.gs.actionUsed = true;
+
+    return {
+      type: 'eavesdrop', heroId: hero.id, heroName: hero.name,
+      roll, bonus: wisBonus, total, dc: EAVESDROP_DC, success, info,
+      diceRolls: [{ diceType: 'd20', roll, bonus: wisBonus, label: '👂 Подслушивание',
+        message: `${hero.name}: d20 + МУД(${wisBonus}) ≥ DC${EAVESDROP_DC}`, success }],
     };
   }
 

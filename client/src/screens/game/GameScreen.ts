@@ -215,6 +215,8 @@ function buildHTML(isSolo: boolean): string {
       <div class="action-dropdown" id="action-dropdown" style="display:none">
         <button class="action-dd-item" id="dd-search">🔍 Разведка</button>
         <button class="action-dd-item" id="dd-magic-vision" style="display:none">👁 Магическое зрение</button>
+        <button class="action-dd-item" id="dd-sneak">🥷 Подкрасться</button>
+        <button class="action-dd-item" id="dd-eavesdrop">👂 Подслушать</button>
         <button class="action-dd-item" id="dd-free-action">📝 Свободное действие</button>
       </div>
     </div>
@@ -691,9 +693,15 @@ function setupActions(isSolo: boolean, isHost: boolean) {
     e.stopPropagation();
     const visible = ddWrap.style.display !== 'none';
     ddWrap.style.display = visible ? 'none' : 'flex';
-    // Show magic vision if hero has it
+    // Show magic vision for mage/priest by default, or if hero has the ability
     const hero = getMyHero();
-    const hasMagicVision = hero && [...(hero.abilities || []), ...(hero.baseAbilities || [])].some((a: any) => a.abilityId === 'magic-vision' || a.abilityId === 'arcane-sight');
+    const hasMagicVision = hero && (
+      hero.cls === 'mage' || hero.cls === 'priest' ||
+      [...(hero.abilities || []), ...(hero.baseAbilities || [])].some((a: any) =>
+        (typeof a === 'string' ? a : a?.abilityId) === 'magic-vision' ||
+        (typeof a === 'string' ? a : a?.abilityId) === 'arcane-sight'
+      )
+    );
     const mvBtn = document.getElementById('dd-magic-vision');
     if (mvBtn) mvBtn.style.display = hasMagicVision ? 'flex' : 'none';
   });
@@ -716,7 +724,23 @@ function setupActions(isSolo: boolean, isHost: boolean) {
   document.getElementById('dd-magic-vision')?.addEventListener('click', () => {
     ddWrap.style.display = 'none';
     showInteractiveDicePopup('d20', 'Магическое зрение — бросьте кубик', 12, (roll) => {
-      sock?.emit('action-request', { type: 'ability', abilityId: 'magic-vision', roll });
+      sock?.emit('action-request', { type: 'magic-vision', roll });
+    });
+  });
+
+  // Подкрасться
+  document.getElementById('dd-sneak')?.addEventListener('click', () => {
+    ddWrap.style.display = 'none';
+    showInteractiveDicePopup('d20', 'Скрытность — бросьте кубик', 12, (roll) => {
+      sock?.emit('action-request', { type: 'sneak', roll });
+    });
+  });
+
+  // Подслушать
+  document.getElementById('dd-eavesdrop')?.addEventListener('click', () => {
+    ddWrap.style.display = 'none';
+    showInteractiveDicePopup('d20', 'Подслушивание — бросьте кубик', 10, (roll) => {
+      sock?.emit('action-request', { type: 'eavesdrop', roll });
     });
   });
 
@@ -1403,6 +1427,8 @@ function fmtAction(data: any): string {
     case 'rest': return `🛌 Отдых: +${r.hpRestored} HP`;
     case 'free-action': return `💬 ${r.description || r.text}`;
     case 'sneak': return r.success ? `🥷 Скрытность! (d20=${r.roll}+${r.bonus}=${r.total} ≥ ${r.dc})` : `🥷 Замечен (d20=${r.roll}+${r.bonus}=${r.total} < ${r.dc})`;
+    case 'eavesdrop': return r.success ? `👂 Подслушал! ${r.info || ''}` : `👂 Ничего не услышал`;
+    case 'magic-vision': return r.success ? `👁 Магическое зрение! Обнаружено: ${r.discovered || 0}` : `👁 Ничего не видно`;
     case 'use-item': return `🧪 ${r.itemName}: ${r.healing ? '+' + r.healing + ' HP' : ''}${r.manaRestored ? '+' + r.manaRestored + ' MP' : ''}`;
     case 'ability': return `✨ ${r.abilityName || 'Способность'}${r.healing ? ': +' + r.healing + ' HP' : ''}${r.damage ? ': ' + r.damage + ' урона' : ''}${r.shield ? ': щит +' + r.shield : ''} (${r.manaCost} MP)`;
     case 'talk': return `💬 ${r.heroName || 'Герой'} → ${r.npcName || 'НПС'}`;
