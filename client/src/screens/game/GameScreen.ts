@@ -64,11 +64,21 @@ export function renderGameScreen(container: HTMLElement): void {
 
   sock.emit('join-session', { sessionId: session._id });
 
+  let briefingShown = false;
   sock.on('game-state', (data: any) => {
-    if (data.gameState?.map) { gs = data.gameState; onUpdate(); }
+    if (data.gameState?.map) {
+      gs = data.gameState;
+      onUpdate();
+      if (!briefingShown && gs.briefing?.title) { briefingShown = true; showBriefingPopup(); }
+    }
   });
   sock.on('game-started', (data: any) => {
-    if (data.gameState?.map) { gs = data.gameState; onUpdate(); log('🎮 Игра началась!', 'system'); }
+    if (data.gameState?.map) {
+      gs = data.gameState;
+      onUpdate();
+      log('🎮 Игра началась!', 'system');
+      if (!briefingShown && gs.briefing?.title) { briefingShown = true; showBriefingPopup(); }
+    }
   });
   sock.on('action-result', (data: any) => {
     log(fmtAction(data));
@@ -230,6 +240,15 @@ function buildHTML(isSolo: boolean): string {
       </div>
     </div>
   </div>` : ''}
+
+  <!-- Mission briefing popup -->
+  <div class="game-popup-overlay" id="briefing-popup" style="display:none">
+    <div class="game-popup briefing-popup-content">
+      <span class="popup-x-close" data-close="briefing-popup">✕</span>
+      <div id="briefing-body"></div>
+      <button class="dice-popup-btn" id="briefing-start" style="margin-top:16px;width:100%">⚔ Начать приключение</button>
+    </div>
+  </div>
 
   <!-- NPC Dialog popup -->
   <div class="game-popup-overlay" id="npc-dialog-popup" style="display:none">
@@ -1222,13 +1241,15 @@ function showDiceResultPopup(roll: any, onDone: () => void) {
       if (count > DICE_SHAKE_ITERATIONS) {
         clearInterval(interval);
         diceEl.classList.remove('dice-shaking');
-        valueEl.textContent = String(finalRoll);
+        const total = finalRoll + (roll.bonus || 0);
+        valueEl.textContent = String(total);
         valueEl.classList.add(success ? 'dice-value-success' : 'dice-value-fail');
         diceEl.classList.add(success ? 'dice-success' : 'dice-fail');
-        resultEl.style.display = 'block';
-        resultEl.innerHTML = roll.resultText || (success
-          ? `<span class="dice-result-success">✅ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Успех!</span>`
-          : `<span class="dice-result-fail">❌ ${finalRoll}${roll.bonus ? '+' + roll.bonus + '=' + (finalRoll + (roll.bonus||0)) : ''} — Провал!</span>`);
+        // Show bonus breakdown only if there is a bonus
+        if (roll.bonus) {
+          resultEl.style.display = 'block';
+          resultEl.innerHTML = `<span class="dice-bonus-line">${finalRoll} + ${roll.bonus}</span>`;
+        }
         setTimeout(() => { overlay.remove(); onDone(); }, DICE_RESULT_TIMEOUT_MS);
       }
     }, DICE_ANIMATION_INTERVAL_MS);
@@ -1291,16 +1312,18 @@ function showDiceCheckPopup(evt: any) {
         clearInterval(shakeInterval);
         // Final roll
         const roll = Math.floor(Math.random() * maxVal) + 1;
+        const bonus = evt.bonus || 0;
+        const total = roll + bonus;
         diceEl.classList.remove('dice-shaking');
-        valueEl.textContent = String(roll);
-        valueEl.classList.add(roll >= dc ? 'dice-value-success' : 'dice-value-fail');
-        diceEl.classList.add(roll >= dc ? 'dice-success' : 'dice-fail');
-
-        const success = roll >= dc;
-        resultEl.style.display = 'block';
-        resultEl.innerHTML = success
-          ? `<span class="dice-result-success">✅ ${roll} ≥ ${dc} — Успех!</span>`
-          : `<span class="dice-result-fail">❌ ${roll} < ${dc} — Провал!</span>`;
+        valueEl.textContent = String(total);
+        const success = total >= dc;
+        valueEl.classList.add(success ? 'dice-value-success' : 'dice-value-fail');
+        diceEl.classList.add(success ? 'dice-success' : 'dice-fail');
+        // Show bonus breakdown only if there is a bonus
+        if (bonus) {
+          resultEl.style.display = 'block';
+          resultEl.innerHTML = `<span class="dice-bonus-line">${roll} + ${bonus}</span>`;
+        }
 
         // Send result to server
         sock?.emit('dice-check-result', {
@@ -1356,6 +1379,43 @@ function fmtAction(data: any): string {
     case 'combat-start': return `⚔ БОЙ! Порядок: ${r.turnOrder?.map((t: any) => t.name).join(' → ')}`;
     default: return `⚡ ${r.type || data.action?.type || 'Действие'}`;
   }
+}
+
+// ═══════════════════════════════════
+// MISSION BRIEFING POPUP
+// ═══════════════════════════════════
+function showBriefingPopup() {
+  const popup = document.getElementById('briefing-popup');
+  const body = document.getElementById('briefing-body');
+  if (!popup || !body || !gs) return;
+
+  const b = gs.briefing || {};
+  const obj = gs.objectives || {};
+
+  body.innerHTML = `
+    <div class="briefing-header">
+      <h2 class="briefing-title">${b.title || gs.scenarioName || 'Миссия'}</h2>
+      ${b.subtitle ? `<p class="briefing-subtitle">${b.subtitle}</p>` : ''}
+    </div>
+    ${b.lore || gs.introNarration ? `<div class="briefing-lore">${b.lore || gs.introNarration}</div>` : ''}
+    ${gs.scenarioDescription ? `<p class="briefing-desc">${gs.scenarioDescription}</p>` : ''}
+    <div class="briefing-objectives">
+      <h3 class="briefing-obj-title">🎯 Цели</h3>
+      ${obj.main ? `<div class="briefing-obj briefing-obj-main">⚔ <strong>Основная:</strong> ${obj.main}</div>` : ''}
+      ${obj.bonus ? `<div class="briefing-obj briefing-obj-bonus">⭐ <strong>Бонусная:</strong> ${obj.bonus}</div>` : ''}
+      ${obj.secret ? `<div class="briefing-obj briefing-obj-secret">🔮 <strong>Секретная:</strong> ???</div>` : ''}
+    </div>
+    ${b.tips ? `<div class="briefing-tips"><h4>💡 Советы</h4><p>${b.tips}</p></div>` : ''}
+  `;
+
+  popup.style.display = 'flex';
+
+  document.getElementById('briefing-start')?.addEventListener('click', () => {
+    popup.style.display = 'none';
+  });
+  popup.querySelector('.popup-x-close')?.addEventListener('click', () => {
+    popup.style.display = 'none';
+  });
 }
 
 // ═══════════════════════════════════

@@ -2403,6 +2403,11 @@ GameEngine.initializeFromDB = async function (session) {
     mapWidth: COLS,
     mapHeight: ROWS,
     bgImage: gameMap.bgImage || '',
+    scenarioName: scenario.name || '',
+    scenarioDescription: scenario.description || '',
+    introNarration: scenario.introNarration || '',
+    briefing: scenario.briefing || {},
+    objectives: scenario.objectives || {},
     matchStats: {},
     mission: {
       objectivesCompleted: [],
