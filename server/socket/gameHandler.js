@@ -275,12 +275,39 @@ function setupGameHandler(io) {
         gameNsp.to(`session:${sessionId}`).emit('action-result', eventPayload);
         debouncedSave(sessionId, engine.gs);
 
-        // Check if combat ended
+        // Combat started — broadcast turn order
+        if (result?.combatStarted) {
+          gameNsp.to(`session:${sessionId}`).emit('combat-start', {
+            turnOrder: result.turnOrder || engine.gs.turnOrder,
+            combatZone: result.combatZone || engine.gs.combatZone,
+            combatHeroes: result.combatHeroes || engine.gs.combatHeroes,
+            combatMonsters: result.combatMonsters || engine.gs.combatMonsters,
+          });
+
+          // Auto-advance to first turn (may be monster)
+          setTimeout(async () => {
+            try {
+              const turnResult = engine.startNextTurn();
+              if (turnResult?.type === 'monster_action') {
+                gameNsp.to(`session:${sessionId}`).emit('monster-action', {
+                  ...turnResult, gameState: engine.gs,
+                });
+                debouncedSave(sessionId, engine.gs);
+              } else if (turnResult?.type === 'turn_started') {
+                gameNsp.to(`session:${sessionId}`).emit('turn-started', {
+                  ...turnResult, gameState: engine.gs,
+                });
+              }
+            } catch {}
+          }, 1500);
+        }
+
+        // Combat ended — rewards
         if (result?.combatEnded) {
-          const summary = engine.generateMatchSummary(result.combatResult);
-          gameNsp.to(`session:${sessionId}`).emit('match-ended', {
-            result: result.combatResult,
-            summary,
+          gameNsp.to(`session:${sessionId}`).emit('combat-ended', {
+            result: result.combatEnded.result,
+            summary: result.combatEnded.summary,
+            rewards: result.combatEnded.rewards,
             gameState: engine.gs,
           });
         }

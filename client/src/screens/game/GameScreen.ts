@@ -92,12 +92,45 @@ export function renderGameScreen(container: HTMLElement): void {
     }
     // All other dice rolls — animated display of server result
     if (rolls.length > 0) { showDiceRollSequence(rolls); }
+    // Interactive damage roll — player must roll damage dice
+    if (data.result?.pendingDamage) { showDamageDicePopup(data.result); }
     // Chest popup
     if (data.result?.showChestPopup) { showChestLootPopup(data.result.chestId, data.result.loot); }
     // NPC dialog popup
     if (data.result?.type === 'talk' && data.result?.npcName) { showNpcDialogPopup(data.result); }
   });
   sock.on('action-error', (data: any) => log(`❌ ${data.error || data.message || 'Ошибка'}`, 'error'));
+
+  // ─── COMBAT EVENTS ───
+  sock.on('combat-start', (data: any) => {
+    log('⚔ БОЙ НАЧАЛСЯ!', 'system');
+    showCombatStartPopup(data);
+    if (data.turnOrder) renderTurnOrderPanel(data.turnOrder);
+  });
+  sock.on('combat-ended', (data: any) => {
+    log(`🏁 Бой окончен: ${data.result === 'victory' ? 'Победа!' : 'Поражение...'}`, 'system');
+    hideTurnOrderPanel();
+    showCombatEndPopup(data);
+  });
+  sock.on('monster-action', (data: any) => {
+    if (data.gameState) { gs = data.gameState; onUpdate(); }
+    const mr = data.monsterResult || data;
+    if (mr.type === 'monster_attack') {
+      log(`👹 ${mr.monsterName || 'Монстр'} атакует ${mr.targetName || 'героя'}: ${mr.damage || 0} урона`, 'error');
+    } else if (mr.type === 'monster_move') {
+      log(`👹 ${mr.monsterName || 'Монстр'} перемещается`, 'system');
+    }
+    // Update turn order highlight
+    if (data.nextTurn?.entityId) updateTurnOrderHighlight(data.nextTurn.entityId);
+  });
+  sock.on('turn-started', (data: any) => {
+    if (data.gameState) { gs = data.gameState; onUpdate(); }
+    const myHero = getMyHero();
+    if (data.ownerId === user?._id || data.entityId === myHero?.id) {
+      showYourTurnToast();
+    }
+    if (data.entityId) updateTurnOrderHighlight(data.entityId);
+  });
   sock.on('ai-narration', (data: any) => { setNarration(data.text); log(`📜 ${data.text}`, 'narration'); });
   sock.on('chat-message', (data: any) => addChat(data.displayName, data.text, data.userId === user?._id));
   sock.on('player-connected', (data: any) => log(`👤 ${data.displayName} подключился`, 'system'));
@@ -243,6 +276,28 @@ function buildHTML(isSolo: boolean): string {
     </div>
   </div>` : ''}
 
+  <!-- Turn order panel (combat) -->
+  <div class="turn-order-panel" id="turn-order-panel" style="display:none"></div>
+
+  <!-- Combat start popup -->
+  <div class="game-popup-overlay" id="combat-start-popup" style="display:none">
+    <div class="game-popup combat-start-content">
+      <h2 class="combat-start-title">⚔ БОЙ!</h2>
+      <div id="combat-start-order" class="combat-start-order"></div>
+      <button class="dice-popup-btn" id="combat-start-ok" style="margin-top:16px;width:100%">В бой!</button>
+    </div>
+  </div>
+
+  <!-- Combat end popup -->
+  <div class="game-popup-overlay" id="combat-end-popup" style="display:none">
+    <div class="game-popup combat-end-content">
+      <span class="popup-x-close" data-close="combat-end-popup">✕</span>
+      <h2 id="combat-end-title" class="combat-end-title"></h2>
+      <div id="combat-end-rewards" class="combat-end-rewards"></div>
+      <button class="dice-popup-btn" id="combat-end-ok" style="margin-top:16px;width:100%">Продолжить</button>
+    </div>
+  </div>
+
   <!-- Mission briefing popup -->
   <div class="game-popup-overlay" id="briefing-popup" style="display:none">
     <div class="game-popup briefing-popup-content">
@@ -368,11 +423,12 @@ function updateHUD() {
   const bonusUsed = myHero?.bonusActionUsed || gs.bonusActionUsed;
 
   el('btn-move')?.classList.toggle('action-btn--disabled', steps <= 0);
+  // Main actions: attack, search (action dropdown items are main too)
   el('btn-attack')?.classList.toggle('action-btn--disabled', !!actionUsed);
-  el('btn-search')?.classList.toggle('action-btn--disabled', !!actionUsed);
-  el('btn-ability')?.classList.toggle('action-btn--disabled', !!actionUsed);
+  el('btn-interact')?.classList.toggle('action-btn--disabled', !!actionUsed);
+  // Bonus actions: ability, item
+  el('btn-ability')?.classList.toggle('action-btn--disabled', !!bonusUsed);
   el('btn-item')?.classList.toggle('action-btn--disabled', !!bonusUsed);
-  el('btn-interact')?.classList.toggle('action-btn--disabled', !!bonusUsed);
 
   // Show "no actions left" popup when all actions exhausted
   if (moveUsed && actionUsed && bonusUsed && !document.querySelector('.no-actions-popup')) {
@@ -1663,5 +1719,167 @@ function showChestLootPopup(chestId: string, loot: any) {
   // Close
   document.getElementById('chest-close')?.addEventListener('click', () => {
     popup.style.display = 'none';
+  });
+}
+
+// ═══════════════════════════════════
+// COMBAT UI
+// ═══════════════════════════════════
+
+function showCombatStartPopup(data: any) {
+  const popup = document.getElementById('combat-start-popup')!;
+  const orderEl = document.getElementById('combat-start-order')!;
+  const turnOrder = data.turnOrder || [];
+
+  orderEl.innerHTML = turnOrder.map((t: any) => {
+    const isHero = t.type === 'hero';
+    const entity = isHero
+      ? gs.heroes?.find((h: any) => h.id === t.entityId)
+      : gs.monsters?.find((m: any) => m.id === t.entityId);
+    const name = entity?.name || t.entityId;
+    return `<div class="combat-init-entry ${isHero ? 'combat-init-hero' : 'combat-init-monster'}">
+      <span class="combat-init-icon">${isHero ? '🧙' : '👹'}</span>
+      <span class="combat-init-name">${name}</span>
+      <span class="combat-init-roll">🎲 ${t.initiative}</span>
+    </div>`;
+  }).join('');
+
+  popup.style.display = 'flex';
+  document.getElementById('combat-start-ok')?.addEventListener('click', () => {
+    popup.style.display = 'none';
+  });
+}
+
+function renderTurnOrderPanel(turnOrder: any[]) {
+  const panel = document.getElementById('turn-order-panel')!;
+  panel.style.display = 'flex';
+  panel.innerHTML = turnOrder.map((t: any, i: number) => {
+    const isHero = t.type === 'hero';
+    const entity = isHero
+      ? gs.heroes?.find((h: any) => h.id === t.entityId)
+      : gs.monsters?.find((m: any) => m.id === t.entityId);
+    const name = entity?.name || '?';
+    const isCurrent = i === (gs.currentTurnIdx || 0);
+    return `<div class="turn-order-entry ${isHero ? 'to-hero' : 'to-monster'} ${isCurrent ? 'to-current' : ''}" data-entity-id="${t.entityId}">
+      <span class="to-icon">${isHero ? '🧙' : '👹'}</span>
+      <span class="to-name">${name}</span>
+    </div>`;
+  }).join('');
+}
+
+function updateTurnOrderHighlight(entityId: string) {
+  document.querySelectorAll('.turn-order-entry').forEach(el => {
+    el.classList.toggle('to-current', (el as HTMLElement).dataset.entityId === entityId);
+  });
+}
+
+function hideTurnOrderPanel() {
+  const panel = document.getElementById('turn-order-panel');
+  if (panel) panel.style.display = 'none';
+}
+
+function showYourTurnToast() {
+  const existing = document.querySelector('.your-turn-toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = 'your-turn-toast';
+  toast.textContent = '⚔ Ваш ход!';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2000);
+}
+
+function showDamageDicePopup(result: any) {
+  document.querySelector('.dice-popup-overlay')?.remove();
+
+  const diceType = result.diceType || 'd6';
+  const diceCount = result.diceCount || 1;
+  const maxVal = parseInt(diceType.replace('d', '')) || 6;
+  const isCrit = result.isCrit;
+  const diceImg = DICE_IMAGES[diceType] || DICE_IMAGES['d6'];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'dice-popup-overlay';
+  overlay.innerHTML = `
+    <div class="dice-popup">
+      <div class="dice-popup-title">${isCrit ? '💥 КРИТИЧЕСКИЙ УДАР!' : '⚔ Бросок урона'}</div>
+      <p class="dice-popup-message">${result.heroName} → ${result.targetName} (${result.damageDice})</p>
+      <div class="dice-popup-dice-wrap">
+        ${Array.from({length: diceCount}, (_, i) => `
+          <div class="dice-popup-dice" id="dmg-dice-${i}">
+            <img src="${diceImg}" alt="${diceType}" class="dice-img" />
+          </div>
+        `).join('')}
+      </div>
+      <div class="dice-popup-value" id="dmg-dice-value">${result.damageDice}</div>
+      <button class="dice-popup-btn" id="btn-roll-damage">🎲 Бросить урон</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('btn-roll-damage')!.addEventListener('click', () => {
+    document.getElementById('btn-roll-damage')!.style.display = 'none';
+    // Shake all dice
+    for (let i = 0; i < diceCount; i++) {
+      document.getElementById(`dmg-dice-${i}`)?.classList.add('dice-shaking');
+    }
+    const valueEl = document.getElementById('dmg-dice-value')!;
+    let count = 0;
+    const interval = setInterval(() => {
+      const rands = Array.from({length: diceCount}, () => Math.floor(Math.random() * maxVal) + 1);
+      valueEl.textContent = rands.join(' + ');
+      count++;
+      if (count > DICE_SHAKE_ITERATIONS) {
+        clearInterval(interval);
+        // Final rolls
+        const finalRolls = Array.from({length: diceCount}, () => Math.floor(Math.random() * maxVal) + 1);
+        const total = finalRolls.reduce((s, v) => s + v, 0);
+        for (let i = 0; i < diceCount; i++) {
+          document.getElementById(`dmg-dice-${i}`)?.classList.remove('dice-shaking');
+          document.getElementById(`dmg-dice-${i}`)?.classList.add(isCrit ? 'dice-success' : 'dice-success');
+        }
+        valueEl.textContent = diceCount > 1 ? `${finalRolls.join(' + ')} = ${total}` : String(total);
+        valueEl.classList.add('dice-value-success');
+
+        // Send to server
+        sock?.emit('action-request', {
+          type: 'resolve-damage',
+          rolls: finalRolls,
+          targetId: result.targetId,
+          attackBonus: result.attackBonus,
+        });
+
+        setTimeout(() => overlay.remove(), DICE_RESULT_TIMEOUT_MS);
+      }
+    }, DICE_ANIMATION_INTERVAL_MS);
+  });
+}
+
+function showCombatEndPopup(data: any) {
+  const popup = document.getElementById('combat-end-popup')!;
+  const titleEl = document.getElementById('combat-end-title')!;
+  const rewardsEl = document.getElementById('combat-end-rewards')!;
+
+  const isVictory = data.result === 'victory';
+  titleEl.textContent = isVictory ? '🎉 Победа!' : '💀 Поражение...';
+  titleEl.style.color = isVictory ? '#3acc60' : '#ff4d4d';
+
+  if (isVictory && data.rewards) {
+    const r = data.rewards;
+    rewardsEl.innerHTML = `
+      <div class="combat-reward-row">💠 Опыт: <strong>+${r.xp || 0} XP</strong></div>
+      <div class="combat-reward-row">🥈 Серебро: <strong>+${r.silver || 0}</strong></div>
+      ${r.gold ? `<div class="combat-reward-row">🪙 Золото: <strong>+${r.gold}</strong></div>` : ''}
+      ${r.items?.length ? `<div class="combat-reward-row">🎁 Предметы: ${r.items.map((i: any) => i.name).join(', ')}</div>` : ''}
+    `;
+  } else {
+    rewardsEl.innerHTML = '<p style="color:var(--text-dim)">Герои пали в бою...</p>';
+  }
+
+  popup.style.display = 'flex';
+  document.getElementById('combat-end-ok')?.addEventListener('click', () => {
+    popup.style.display = 'none';
+    if (!isVictory) {
+      window.location.href = '/dashboard';
+    }
   });
 }

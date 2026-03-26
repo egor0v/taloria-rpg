@@ -24,9 +24,14 @@ const SURPRISE_INITIATIVE_BONUS = 10;
 const SURPRISE_DAMAGE_BONUS = 5;
 const SURPRISE_CRIT_BONUS = 0.20;
 const CRIT_DAMAGE_MULTIPLIER = 2;
-const COMBAT_ZONE_RANGE = 4;
-const ENCOUNTER_RANGE = 3;
+const AGGRO_RANGE = 2;          // Chebyshev distance — triggers combat
+const COMBAT_JOIN_RANGE = 5;    // Chebyshev — all heroes/enemies within join combat (multiplayer)
+const COMBAT_ZONE_RANGE = 5;    // Combat zone boundary
+const ENCOUNTER_RANGE = 3;      // Legacy — used for NPC detection
 const NPC_INTERACT_RANGE = 4;
+
+// Chebyshev distance helper (includes diagonals)
+const chebyshevDist = (r1, c1, r2, c2) => Math.max(Math.abs(r1 - r2), Math.abs(c1 - c2));
 
 // Fog of war
 const FOG_HIDDEN = 0;
@@ -226,6 +231,8 @@ class GameEngine {
         return this.gs.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
       case 'free-action':
         return hero.bonusActionUsed ? { ok: false, error: 'Бонусное действие уже использовано' } : { ok: true };
+      case 'resolve-damage':
+        return this.gs._pendingDamage ? { ok: true } : { ok: false, error: 'Нет ожидающего урона' };
       case 'loot-chest':
         return { ok: true };
       case 'end-turn':
@@ -298,9 +305,9 @@ class GameEngine {
   }
 
   validateAbility(hero, action) {
-    // Действие (основное или бонусное) уже использовано?
-    if (this.gs.actionUsed && this.gs.bonusActionUsed) {
-      return { ok: false, error: 'Все действия использованы' };
+    // Способность = дополнительное действие
+    if (this.gs.bonusActionUsed) {
+      return { ok: false, error: 'Дополнительное действие уже использовано' };
     }
 
     // Ошеломлён — нет способностей
@@ -408,6 +415,9 @@ class GameEngine {
       case 'free-action':
         result = this.executeFreeAction(action);
         break;
+      case 'resolve-damage':
+        result = this.resolveDamage(action);
+        break;
       case 'loot-chest':
         result = this.executeLootChest(action);
         break;
@@ -457,11 +467,25 @@ class GameEngine {
     // Check for traps, encounters, etc. (simplified)
     const events = [...hazardEvents];
 
-    // In explore mode, check for monster aggro
+    // In explore mode, check for monster aggro → auto-start combat
+    let combatStarted = false;
     if (this.gs.mode === 'explore') {
       const aggroMonsters = this.checkAggroAfterMove(hero);
       if (aggroMonsters.length > 0) {
-        events.push({ type: 'encounter', monsters: aggroMonsters.map(m => m.id) });
+        // Also pull in all enemies within COMBAT_JOIN_RANGE of the encounter
+        const allNearby = this.gs.monsters.filter(m =>
+          m.hp > 0 && !m.friendly && !m.fled && !m.aggro &&
+          aggroMonsters.some(am => chebyshevDist(m.row, m.col, am.row, am.col) <= COMBAT_JOIN_RANGE)
+        );
+        allNearby.forEach(m => { m.aggro = true; m.discovered = true; });
+        const allCombatMonsters = [...aggroMonsters, ...allNearby];
+
+        this.initCombat(allCombatMonsters);
+        combatStarted = true;
+        events.push({
+          type: 'encounter',
+          monsters: allCombatMonsters.map(m => ({ id: m.id, name: m.name, row: m.row, col: m.col })),
+        });
       }
     }
 
@@ -475,6 +499,13 @@ class GameEngine {
       to: { x: hero.col, y: hero.row },
       path,
       events,
+      combatStarted,
+      ...(combatStarted ? {
+        turnOrder: this.gs.turnOrder,
+        combatZone: this.gs.combatZone,
+        combatHeroes: this.gs.combatHeroes,
+        combatMonsters: this.gs.combatMonsters,
+      } : {}),
       stepsRemaining: hero.stepsRemaining,
     };
   }
@@ -543,62 +574,40 @@ class GameEngine {
       };
     }
 
-    // Damage roll
+    // Penetrated! Now player rolls damage dice
     const damageDie = this.getHeroDamageDie(hero);
-    const dmgRoll = this.rollDice(damageDie);
     const surpriseBonus = hero.surpriseAttack ? SURPRISE_DAMAGE_BONUS : 0;
     let attackBonus = (hero.attack || 0) + surpriseBonus;
-
-    // Inspired buff
     const inspiredBonus = getDamageBonus(hero);
     attackBonus += inspiredBonus;
-
-    // Consume inspired (one-time)
-    if (inspiredBonus > 0) {
-      removeStatus(hero, 'inspired');
-    }
-
-    // Vulnerability on target
     const vulnBonus = getVulnerability(target);
     attackBonus += vulnBonus;
 
-    // Damage = weaponRoll + attackBonus - targetArmor (min 1)
-    const targetArmor = this.getEntityArmor(target);
-    const baseDmg = Math.max(1, dmgRoll + attackBonus - targetArmor);
-    const finalDmg = isCrit ? baseDmg * CRIT_DAMAGE_MULTIPLIER : baseDmg;
+    // Determine dice notation (e.g., 'd8', '2d6')
+    const weapon = hero.equipment?.weapon;
+    const diceCount = weapon?.diceCount || 1;
+    const diceNotation = diceCount > 1 ? `${diceCount}d${damageDie}` : `d${damageDie}`;
 
-    // Apply damage with shields/reduction
-    const dmgResult = applyDamage(target, finalDmg);
+    // Store pending damage context for resolve-damage
+    this.gs._pendingDamage = {
+      heroId: hero.id,
+      targetId: target.id,
+      attackBonus,
+      isCrit,
+      inspiredBonus,
+      vulnBonus,
+    };
 
     // Clear surprise
     if (hero.surpriseAttack) {
       hero.surpriseAttack = false;
       hero.stealth = 0;
     }
-
-    // Process marks on target
-    this.processMarksOnDamage(hero, target, 'attack', null);
-
-    // Break sleep
-    if (finalDmg > 0 && hasStatus(target, 'sleep')) {
-      removeStatus(target, 'sleep');
-    }
+    if (inspiredBonus > 0) removeStatus(hero, 'inspired');
 
     this.gs.actionUsed = true;
 
-    // Track stats
-    this.trackDamage(hero.id, finalDmg);
-    this.trackDamageTaken(target.id, finalDmg);
-
-    // Check death
-    let killed = false;
-    if (target.hp <= 0) {
-      killed = true;
-      this.killEntity(target);
-      this.trackKill(hero.id, target.id);
-    }
-
-    this.addLog(`${hero.name} наносит ${finalDmg} урона ${target.name}${isCrit ? ' (КРИТ!)' : ''}`, 'log-damage');
+    this.addLog(`${hero.name} пробивает броню ${target.name}! Бросьте кубик урона...`, 'log-action');
 
     return {
       type: 'attack',
@@ -606,15 +615,59 @@ class GameEngine {
       targetId: target.id, targetName: target.name,
       d20: armorRoll, effectiveArmor: armorValue,
       penetrated: true, isCrit,
-      dmgRoll, damageDie, attackBonus, baseDmg, finalDmg,
-      shieldAbsorbed: dmgResult.shieldAbsorbed,
-      reduced: dmgResult.reduced,
-      targetHp: target.hp, targetAlive: target.hp > 0,
-      killed,
+      // Interactive damage: client must roll and send resolve-damage
+      pendingDamage: true,
+      damageDice: diceNotation,
+      diceType: `d${damageDie}`,
+      diceCount,
+      attackBonus,
+      hits: true,
       diceRolls: [
-        { diceType: 'd20', roll: armorRoll, label: '⚔ Попадание', message: `${hero.name} → ${target.name}`, success: true, resultText: `<span class="dice-result-success">✅ d20=${armorRoll} > броня ${armorValue}${isCrit ? ' — КРИТ!' : ''}</span>` },
-        { diceType: `d${damageDie}`, roll: dmgRoll, label: '💥 Урон', message: `${finalDmg} урона${killed ? ' — УБИТ!' : ''}`, success: !killed, bonus: attackBonus, resultText: `<span class="${killed ? 'dice-result-fail' : 'dice-result-success'}">${isCrit ? '💥' : '⚔'} d${damageDie}=${dmgRoll}+${attackBonus}-${targetArmor}=${finalDmg} урона${killed ? ' ☠ УБИТ!' : ''}</span>` },
+        { diceType: 'd20', roll: armorRoll, label: '⚔ Попадание', message: `${hero.name} → ${target.name}`, success: true },
       ],
+    };
+  }
+
+  // ============================================================
+  // RESOLVE DAMAGE — player rolled damage dice, apply result
+  // ============================================================
+
+  resolveDamage(action) {
+    const pending = this.gs._pendingDamage;
+    if (!pending) return { type: 'resolve-damage', error: 'Нет ожидающего урона' };
+
+    const hero = this.findHero(pending.heroId);
+    const target = this.gs.monsters.find(m => m.id === pending.targetId) ||
+                   this.gs.heroes.find(h => h.id === pending.targetId);
+    if (!target) { this.gs._pendingDamage = null; return { type: 'resolve-damage', error: 'Цель не найдена' }; }
+
+    const rolls = action.rolls || [action.roll || 1];
+    const dmgRoll = rolls.reduce((s, v) => s + v, 0);
+    const targetArmor = this.getEntityArmor(target);
+    const baseDmg = Math.max(1, dmgRoll + pending.attackBonus - targetArmor);
+    const finalDmg = pending.isCrit ? baseDmg * CRIT_DAMAGE_MULTIPLIER : baseDmg;
+
+    applyDamage(target, finalDmg);
+    if (hero) this.processMarksOnDamage(hero, target, 'attack', null);
+    if (finalDmg > 0 && hasStatus(target, 'sleep')) removeStatus(target, 'sleep');
+    if (hero) { this.trackDamage(hero.id, finalDmg); this.trackDamageTaken(target.id, finalDmg); }
+
+    let killed = false;
+    if (target.hp <= 0) { killed = true; this.killEntity(target); if (hero) this.trackKill(hero.id, target.id); }
+
+    const heroName = hero?.name || 'Герой';
+    this.addLog(`${heroName} наносит ${finalDmg} урона ${target.name}${pending.isCrit ? ' (КРИТ!)' : ''}`, 'log-damage');
+    this.gs._pendingDamage = null;
+
+    let combatEnded = null;
+    if (this.gs.mode === 'combat') combatEnded = this.checkCombatEnd();
+
+    return {
+      type: 'resolve-damage', heroId: pending.heroId, heroName,
+      targetId: target.id, targetName: target.name,
+      rolls, dmgRoll, attackBonus: pending.attackBonus, finalDmg,
+      isCrit: pending.isCrit, targetHp: target.hp, targetMaxHp: target.maxHp,
+      targetAlive: target.hp > 0, killed, combatEnded,
     };
   }
 
@@ -642,11 +695,8 @@ class GameEngine {
     // No damage roll abilities (heal, buff, etc.)
     if (mech.noDamageRoll) {
       const result = this.executeNoDamageAbility(hero, action, mech);
-      if (!this.gs.actionUsed) {
-        this.gs.actionUsed = true;
-      } else {
-        this.gs.bonusActionUsed = true;
-      }
+      // Ability = bonus action (дополнительное действие)
+      this.gs.bonusActionUsed = true;
       return result;
     }
 
@@ -684,11 +734,7 @@ class GameEngine {
     }
 
     if (!penetrated) {
-      if (!this.gs.actionUsed) {
-        this.gs.actionUsed = true;
-      } else {
-        this.gs.bonusActionUsed = true;
-      }
+      this.gs.bonusActionUsed = true;
       this.addLog(`${hero.name} использует способность — броня выдержала!`, 'log-action');
       return {
         type: 'ability',
@@ -760,11 +806,8 @@ class GameEngine {
       hero.stealth = 0;
     }
 
-    if (!this.gs.actionUsed) {
-      this.gs.actionUsed = true;
-    } else {
-      this.gs.bonusActionUsed = true;
-    }
+    // Ability = bonus action (дополнительное действие)
+    this.gs.bonusActionUsed = true;
 
     // Check death
     let killed = false;
@@ -1676,13 +1719,13 @@ class GameEngine {
     this.gs.mode = 'combat';
     this.gs.combatMonsters = aggroMonsters.map(m => m.id);
 
-    // Calculate combat zone
+    // Calculate combat zone (Chebyshev COMBAT_ZONE_RANGE from each monster)
     this.gs.combatZone = this.calculateCombatZone(aggroMonsters);
 
-    // Determine combat heroes
+    // Determine combat heroes — all within COMBAT_JOIN_RANGE of any aggro monster
     this.gs.combatHeroes = this.gs.heroes
       .filter(h => h.hp > 0 && !h.dead && !h.leftGame &&
-        this.gs.combatZone.some(z => z.row === h.row && z.col === h.col))
+        aggroMonsters.some(m => chebyshevDist(h.row, h.col, m.row, m.col) <= COMBAT_JOIN_RANGE))
       .map(h => h.id);
 
     // Roll initiative
@@ -1828,12 +1871,15 @@ class GameEngine {
   }
 
   checkAggroAfterMove(hero) {
+    // Stealth heroes don't trigger aggro (unless adjacent)
+    const stealthRange = hasStatus(hero, 'stealth') ? 1 : AGGRO_RANGE;
     const newlyAggro = [];
     for (const mon of this.gs.monsters) {
-      if (mon.hp <= 0 || mon.fled || mon.aggro) continue;
-      const dist = Math.abs(mon.row - hero.row) + Math.abs(mon.col - hero.col);
-      if (dist <= ENCOUNTER_RANGE) {
+      if (mon.hp <= 0 || mon.fled || mon.aggro || mon.friendly) continue;
+      const dist = chebyshevDist(mon.row, mon.col, hero.row, hero.col);
+      if (dist <= stealthRange) {
         mon.aggro = true;
+        mon.discovered = true;
         newlyAggro.push(mon);
       }
     }

@@ -301,6 +301,65 @@
 .briefing-tips { font-size: 0.8rem; color: var(--text-dim); padding: 10px; background: rgba(255,255,255,0.02); border-radius: 6px; }
 .briefing-tips h4 { margin: 0 0 4px; color: var(--text); font-size: 0.85rem; }
 
+/* ─── Turn order panel ─── */
+.turn-order-panel {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 12;
+  display: flex; gap: 4px; padding: 4px 8px; background: rgba(11,13,18,0.9);
+  border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+  backdrop-filter: blur(6px);
+}
+.turn-order-entry {
+  display: flex; align-items: center; gap: 3px; padding: 4px 8px;
+  border-radius: 5px; font-size: 0.7rem; white-space: nowrap; transition: all 0.2s;
+}
+.to-hero { background: rgba(58,204,96,0.1); color: #3acc60; }
+.to-monster { background: rgba(255,77,77,0.1); color: #ff6b6b; }
+.to-current { border: 2px solid var(--gold, #f6c86d); box-shadow: 0 0 8px rgba(246,200,109,0.3); }
+.to-icon { font-size: 0.9rem; }
+.to-name { font-weight: 600; max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+
+/* ─── Combat start popup ─── */
+.combat-start-content { text-align: center; min-width: 320px; }
+.combat-start-title {
+  font-family: var(--font-heading); font-size: 2rem; font-weight: 900; color: #ff4d4d;
+  text-shadow: 0 0 20px rgba(255,77,77,0.5); margin: 0 0 16px;
+  animation: combatPulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes combatPulse { 0% { transform: scale(1); } 100% { transform: scale(1.05); } }
+.combat-start-order { display: flex; flex-direction: column; gap: 4px; }
+.combat-init-entry {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  border-radius: 6px; font-size: 0.82rem;
+}
+.combat-init-hero { background: rgba(58,204,96,0.08); color: #3acc60; }
+.combat-init-monster { background: rgba(255,77,77,0.08); color: #ff6b6b; }
+.combat-init-icon { font-size: 1.1rem; }
+.combat-init-name { flex: 1; font-weight: 600; }
+.combat-init-roll { font-size: 0.72rem; color: var(--text-dim); }
+
+/* ─── Combat end popup ─── */
+.combat-end-content { text-align: center; min-width: 320px; }
+.combat-end-title { font-family: var(--font-heading); font-size: 1.6rem; font-weight: 900; margin: 0 0 16px; }
+.combat-end-rewards { text-align: left; }
+.combat-reward-row { padding: 4px 0; font-size: 0.85rem; color: var(--text); }
+
+/* ─── Your turn toast ─── */
+.your-turn-toast {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 10000; padding: 16px 40px; border-radius: 12px;
+  background: rgba(246,200,109,0.15); border: 2px solid var(--gold, #f6c86d);
+  color: var(--gold); font-family: var(--font-heading); font-size: 1.4rem; font-weight: 900;
+  text-shadow: 0 0 15px rgba(246,200,109,0.5); pointer-events: none;
+  animation: toastFade 2s ease-in-out forwards;
+}
+@keyframes toastFade {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+  30% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -60%); }
+}
+
 /* NPC hover popup */
 .npc-hover-popup { position: fixed; z-index: 10000; background: linear-gradient(145deg, #2a2520, #1a1610); border: 1px solid rgba(201,162,78,0.4); border-radius: 10px; padding: 0; min-width: 220px; max-width: 280px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); pointer-events: auto; overflow: hidden; }
 .npc-hover-preview { width: 100%; height: 160px; overflow: hidden; background: #111; }
