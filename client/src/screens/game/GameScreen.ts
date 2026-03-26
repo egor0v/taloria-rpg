@@ -530,10 +530,10 @@ function renderMap() {
           : `<span class="token-object" title="${obj.name || obj.type}">${icon}</span>`;
       }
 
-      // Markers (multiplayer)
+      // Markers (multiplayer) — visible on ANY cell including walls/fog
       const marker = gs.markers?.find((m: any) => m.col === x && m.row === y && (!m.visibleTo?.length || m.visibleTo.includes(user?._id) || m.visibleTo.includes('all')));
-      if (marker && fogV > 0) {
-        content += `<span class="map-marker" title="Метка">${marker.icon || '✖'}</span>`;
+      if (marker) {
+        content += `<span class="map-marker" title="Метка от ${marker.ownerName || 'игрока'}">${marker.icon || '✖'}</span>`;
       }
 
       html += `<div class="${cls}" data-x="${x}" data-y="${y}">${content}</div>`;
@@ -542,11 +542,15 @@ function renderMap() {
   html += '</div>';
   mapEl.innerHTML = html;
 
-  // Cell click handlers
-  mapEl.querySelectorAll('.map-cell:not(.cell-wall):not(.fog-hidden)').forEach(cell => {
+  // Cell click handlers — all cells for markers, passable cells for movement
+  mapEl.querySelectorAll('.map-cell').forEach(cell => {
     cell.addEventListener('click', () => {
       const cx = parseInt((cell as HTMLElement).dataset.x!);
       const cy = parseInt((cell as HTMLElement).dataset.y!);
+      // In marker mode, allow clicking any cell
+      if (markerPlacingMode) { onCellClick(cx, cy); return; }
+      // Normal mode — only passable visible cells
+      if (cell.classList.contains('cell-wall') || cell.classList.contains('fog-hidden')) return;
       onCellClick(cx, cy);
     });
   });
