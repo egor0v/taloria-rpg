@@ -51,7 +51,7 @@ export function renderGameScreen(container: HTMLElement): void {
   if (!sessionData) { navigateTo('/dashboard'); return; }
   session = JSON.parse(sessionData);
   user = getCurrentUser();
-  const isSolo = session.maxPlayers === 1 || (session.players?.length || 0) <= 1;
+  const isSolo = session.maxPlayers === 1;
   const isHost = session.hostUserId === user?._id;
 
   container.innerHTML = buildHTML(isSolo);
@@ -92,6 +92,18 @@ export function renderGameScreen(container: HTMLElement): void {
   sock.on('chat-message', (data: any) => addChat(data.displayName, data.text, data.userId === user?._id));
   sock.on('player-connected', (data: any) => log(`👤 ${data.displayName} подключился`, 'system'));
   sock.on('player-disconnected', (data: any) => log(`👤 ${data.displayName} вышел`, 'system'));
+  sock.on('marker-placed', (data: any) => {
+    if (!gs.markers) gs.markers = [];
+    gs.markers.push(data);
+    renderMap();
+    log(`📌 ${data.ownerName || 'Игрок'} поставил метку (${data.col},${data.row})`, 'system');
+  });
+  sock.on('marker-removed', (data: any) => {
+    if (gs.markers) {
+      gs.markers = gs.markers.filter((m: any) => !(m.col === data.col && m.row === data.row));
+      renderMap();
+    }
+  });
   sock.on('error', (data: any) => log(`⚠ ${data.message}`, 'error'));
   sock.on('game-saved', () => log('💾 Сохранено', 'system'));
 
@@ -101,6 +113,10 @@ export function renderGameScreen(container: HTMLElement): void {
   if (!isSolo) setupChat();
   setupTabs();
   setupZoom();
+  // Mobile log panel toggle
+  document.getElementById('btn-toggle-log')?.addEventListener('click', () => {
+    document.getElementById('right-panel')?.classList.toggle('panel-open');
+  });
 
   log('⏳ Подключение...', 'system');
 }
@@ -154,6 +170,9 @@ function buildHTML(isSolo: boolean): string {
         </div>
       </div>
     </div>
+
+    <!-- Mobile log toggle -->
+    <button class="mobile-log-toggle" id="btn-toggle-log">📋</button>
 
     <!-- Right: Log/Chat -->
     <div class="game-right-panel" id="right-panel">

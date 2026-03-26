@@ -392,6 +392,43 @@ function setupGameHandler(io) {
       }
     });
 
+    // --- Place marker (multiplayer) ---
+    socket.on('place-marker', (data) => {
+      const sessionId = socket.sessionId;
+      if (!sessionId || !data) return;
+      const engine = activeGames.get(sessionId);
+      if (engine?.gs) {
+        if (!engine.gs.markers) engine.gs.markers = [];
+        const marker = {
+          type: data.type || 'cross',
+          icon: data.icon || '✖',
+          col: data.col,
+          row: data.row,
+          owner: socket.userId,
+          ownerName: socket.displayName,
+          visibleTo: data.visibleTo || [],
+          timestamp: new Date().toISOString(),
+        };
+        engine.gs.markers.push(marker);
+        // Broadcast to all players in session
+        gameNsp.to(`session:${sessionId}`).emit('marker-placed', marker);
+      }
+    });
+
+    // --- Remove marker ---
+    socket.on('remove-marker', (data) => {
+      const sessionId = socket.sessionId;
+      if (!sessionId || !data) return;
+      const engine = activeGames.get(sessionId);
+      if (engine?.gs?.markers) {
+        const idx = engine.gs.markers.findIndex(m => m.col === data.col && m.row === data.row && m.owner === socket.userId);
+        if (idx >= 0) {
+          engine.gs.markers.splice(idx, 1);
+          gameNsp.to(`session:${sessionId}`).emit('marker-removed', { col: data.col, row: data.row });
+        }
+      }
+    });
+
     // --- Chat ---
     socket.on('chat-message', (data) => {
       const sessionId = socket.sessionId;

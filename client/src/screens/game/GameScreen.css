@@ -351,11 +351,19 @@
   .game-team-panel { display: none; }
   .game-right-panel { width: 200px; }
 }
+.mobile-log-toggle { display: none; }
 @media (max-width: 600px) {
-  .game-right-panel { position: absolute; right: 0; top: 80px; bottom: 60px; width: 260px; z-index: 15; transform: translateX(100%); transition: transform 0.3s; }
+  .game-right-panel { position: absolute; right: 0; top: 80px; bottom: 60px; width: 260px; z-index: 15; transform: translateX(100%); transition: transform 0.3s; background: var(--panel-solid, #0f1118); }
   .game-right-panel.panel-open { transform: translateX(0); }
+  .mobile-log-toggle {
+    display: flex; position: absolute; right: 8px; top: 48px; z-index: 16;
+    width: 36px; height: 36px; align-items: center; justify-content: center;
+    background: rgba(15,17,24,0.9); border: 1px solid rgba(246,200,109,0.3);
+    border-radius: 8px; font-size: 1.1rem; cursor: pointer; color: var(--gold);
+  }
   .action-btn { min-width: 50px; padding: 6px 8px; }
   .action-label { display: none; }
+  .game-team-panel { display: none; }
 }
 
 /* ═══════════════════════════════════
