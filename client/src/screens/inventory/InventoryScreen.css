@@ -116,6 +116,70 @@
 .inv-xp-track { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
 .inv-xp-fill { height: 100%; background: linear-gradient(90deg, #5b8fff, #a855f7); border-radius: 3px; transition: width 0.3s; }
 
+/* ─── Level Up Popup ─── */
+.levelup-overlay {
+  position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+}
+.levelup-popup {
+  background: linear-gradient(145deg, #2a2520, #1a1610); border: 2px solid rgba(246,200,109,0.5);
+  border-radius: 14px; padding: 28px 32px; min-width: 380px; max-width: 500px; max-height: 85vh;
+  overflow-y: auto; box-shadow: 0 0 40px rgba(246,200,109,0.2);
+}
+.levelup-title {
+  text-align: center; font-family: var(--font-heading, 'Cinzel', serif); font-size: 1.6rem;
+  font-weight: 900; color: var(--gold, #f6c86d); margin: 0 0 16px;
+  text-shadow: 0 0 20px rgba(246,200,109,0.4);
+  animation: levelUpGlow 1.5s ease-in-out infinite;
+}
+@keyframes levelUpGlow { 0%,100% { text-shadow: 0 0 10px rgba(246,200,109,0.3); } 50% { text-shadow: 0 0 30px rgba(246,200,109,0.6); } }
+.levelup-rewards {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 20px;
+}
+.levelup-reward {
+  display: flex; align-items: center; gap: 4px; padding: 6px 12px;
+  background: rgba(58,204,96,0.08); border: 1px solid rgba(58,204,96,0.2);
+  border-radius: 6px; font-size: 0.82rem; color: #3acc60; font-weight: 600;
+}
+.levelup-reward-icon { font-size: 1rem; }
+.levelup-section { margin-bottom: 16px; }
+.levelup-section-title { font-size: 0.9rem; color: var(--text, #e8e6e0); margin: 0 0 10px; }
+.levelup-stats { display: flex; flex-direction: column; gap: 4px; }
+.levelup-stat-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.levelup-stat-label { width: 36px; color: var(--text-dim); font-weight: 600; font-size: 0.8rem; }
+.levelup-stat-val { color: var(--text); font-weight: 700; font-size: 0.9rem; min-width: 24px; }
+.levelup-stat-btn {
+  width: 26px; height: 26px; border-radius: 5px; border: 1px solid rgba(246,200,109,0.3);
+  background: rgba(246,200,109,0.1); color: var(--gold); font-size: 1rem; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.levelup-stat-btn:hover { background: rgba(246,200,109,0.25); transform: scale(1.1); }
+.levelup-points-left { text-align: center; font-size: 0.8rem; color: #5b8fff; margin-top: 8px; }
+.levelup-abilities { display: flex; flex-direction: column; gap: 8px; }
+.levelup-ability {
+  padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; transition: border-color 0.15s;
+}
+.levelup-ability:hover { border-color: rgba(246,200,109,0.3); }
+.levelup-ability-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.levelup-ability-name { font-weight: 700; color: var(--gold); font-size: 0.88rem; }
+.levelup-ability-cost { font-size: 0.72rem; color: #5b8fff; }
+.levelup-ability-desc { font-size: 0.78rem; color: var(--text-dim); line-height: 1.4; margin-bottom: 6px; }
+.levelup-ability-learn {
+  padding: 5px 14px; border: 1px solid rgba(58,204,96,0.3); border-radius: 5px;
+  background: rgba(58,204,96,0.1); color: #3acc60; font-size: 0.78rem; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; font-family: var(--font-body);
+}
+.levelup-ability-learn:hover { background: rgba(58,204,96,0.2); border-color: #3acc60; }
+.levelup-ability-learn.learned { background: rgba(58,204,96,0.05); color: #3acc60; opacity: 0.6; }
+.levelup-done {
+  width: 100%; margin-top: 12px; padding: 12px; border: none; border-radius: 8px;
+  background: linear-gradient(135deg, var(--gold, #f6c86d), #a07830); color: #1a1610;
+  font-family: var(--font-heading); font-size: 1rem; font-weight: 700; cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.levelup-done:hover { transform: scale(1.02); box-shadow: 0 4px 15px rgba(246,200,109,0.3); }
+
 .inv-stat-label {
   color: var(--text-dim);
   font-weight: 600;

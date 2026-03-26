@@ -491,12 +491,11 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
       });
       const data = await res.json();
       if (data.hero) {
-        alert(`🎉 Уровень ${data.hero.level}!\n+${data.rewards?.hpBonus} HP\n+${data.rewards?.mpBonus} MP\n+2 очка навыков${data.rewards?.newAbility ? '\n🆕 Новая способность!' : ''}`);
-        renderInventoryScreen(container);
+        showLevelUpPopup(data.hero, data.rewards, container);
       } else {
-        alert(data.error || 'Ошибка повышения уровня');
+        renderInventoryScreen(container);
       }
-    } catch { alert('Ошибка сети'); }
+    } catch { renderInventoryScreen(container); }
   });
 
   // ===== SPEND SKILL POINTS =====
@@ -504,6 +503,8 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
     btn.addEventListener('click', async () => {
       const stat = (btn as HTMLElement).dataset.stat!;
       const token = localStorage.getItem('taloria_token');
+      (btn as HTMLElement).style.opacity = '0.3';
+      (btn as HTMLElement).style.pointerEvents = 'none';
       try {
         const res = await fetch(`/api/heroes/${hero._id}/spend-skill-points`, {
           method: 'POST',
@@ -514,9 +515,10 @@ function renderHeroBody(body: HTMLElement, hero: any, rootContainer: HTMLElement
         if (data.hero) {
           renderInventoryScreen(container);
         } else {
-          alert(data.error || 'Ошибка');
+          // Refresh screen to sync with server state
+          renderInventoryScreen(container);
         }
-      } catch { alert('Ошибка сети'); }
+      } catch { renderInventoryScreen(container); }
     });
   });
 
@@ -938,4 +940,142 @@ function getItemEmoji(type: string): string {
     tool: '🔧', food: '🍖', junk: '💎', quest: '⭐', jewelry: '💎',
   };
   return map[type] || '📦';
+}
+
+// ═══════════════════════════════════
+// LEVEL UP POPUP
+// ═══════════════════════════════════
+async function showLevelUpPopup(heroData: any, rewards: any, container: HTMLElement) {
+  let hero = heroData;
+
+  // Fetch available abilities for new level
+  let availableAbilities: any[] = [];
+  try {
+    const data = await api.get(`/api/bestiary?tab=abilities&limit=100`);
+    const all = data.data || [];
+    availableAbilities = all.filter((a: any) =>
+      a.unlockLevel <= hero.level &&
+      (a.cls === hero.cls || a.cls === 'any') &&
+      a.type === 'class_ability' &&
+      !hero.learnedAbilities?.includes(a.abilityId)
+    );
+  } catch {}
+
+  // Local fallback
+  if (availableAbilities.length === 0) {
+    availableAbilities = Object.entries(ABILITY_DB)
+      .filter(([id, a]) => a.unlockLevel <= hero.level && (a.cls === hero.cls || a.cls === 'any') && a.type === 'class_ability' && !hero.learnedAbilities?.includes(id))
+      .map(([id, a]) => ({ abilityId: id, ...a, description: a.desc }));
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'levelup-overlay';
+  overlay.innerHTML = `
+    <div class="levelup-popup">
+      <h2 class="levelup-title">⬆ Уровень ${hero.level}!</h2>
+      <div class="levelup-rewards">
+        <div class="levelup-reward"><span class="levelup-reward-icon">❤️</span>+${rewards?.hpBonus || 0} HP</div>
+        <div class="levelup-reward"><span class="levelup-reward-icon">💧</span>+${rewards?.mpBonus || 0} MP</div>
+        <div class="levelup-reward"><span class="levelup-reward-icon">🔹</span>+2 очка навыков</div>
+        <div class="levelup-reward"><span class="levelup-reward-icon">💱</span>+1 торговое очко</div>
+      </div>
+
+      <div class="levelup-section">
+        <h3 class="levelup-section-title">📊 Распределите очки (${hero.skillPoints})</h3>
+        <div class="levelup-stats">
+          ${Object.entries(STAT_NAMES).map(([key, label]) => `
+            <div class="levelup-stat-row">
+              <span class="levelup-stat-label">${label}</span>
+              <span class="levelup-stat-val" id="lvup-${key}">${hero[key] || 0}</span>
+              <button class="levelup-stat-btn" data-stat="${key}">+</button>
+            </div>
+          `).join('')}
+        </div>
+        <div class="levelup-points-left">Осталось: <strong id="lvup-points">${hero.skillPoints}</strong></div>
+      </div>
+
+      ${availableAbilities.length > 0 ? `
+        <div class="levelup-section">
+          <h3 class="levelup-section-title">✨ Новые способности</h3>
+          <div class="levelup-abilities">
+            ${availableAbilities.map((a: any) => `
+              <div class="levelup-ability">
+                <div class="levelup-ability-header">
+                  <span class="levelup-ability-name">${a.name}</span>
+                  <span class="levelup-ability-cost">${a.manaCost ? a.manaCost + ' MP' : ''}</span>
+                </div>
+                <div class="levelup-ability-desc">${a.description || a.desc || ''}</div>
+                <button class="levelup-ability-learn" data-ability="${a.abilityId}">Изучить</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <button class="levelup-done" id="levelup-done">✅ Готово</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Stat allocation
+  overlay.querySelectorAll('.levelup-stat-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (hero.skillPoints <= 0) return;
+      const stat = (btn as HTMLElement).dataset.stat!;
+      const token = localStorage.getItem('taloria_token');
+      (btn as HTMLElement).style.opacity = '0.3';
+      try {
+        const res = await fetch(`/api/heroes/${hero._id}/spend-skill-points`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ [stat]: 1 }),
+        });
+        const data = await res.json();
+        if (data.hero) {
+          hero = data.hero;
+          const valEl = document.getElementById(`lvup-${stat}`);
+          if (valEl) valEl.textContent = String(hero[stat] || 0);
+          const ptsEl = document.getElementById('lvup-points');
+          if (ptsEl) ptsEl.textContent = String(hero.skillPoints);
+          if (hero.skillPoints <= 0) {
+            overlay.querySelectorAll('.levelup-stat-btn').forEach(b => {
+              (b as HTMLElement).style.opacity = '0.3';
+              (b as HTMLElement).style.pointerEvents = 'none';
+            });
+          }
+        }
+      } catch {}
+      (btn as HTMLElement).style.opacity = '1';
+    });
+  });
+
+  // Learn ability
+  overlay.querySelectorAll('.levelup-ability-learn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const abilityId = (btn as HTMLElement).dataset.ability!;
+      const token = localStorage.getItem('taloria_token');
+      (btn as HTMLElement).textContent = '...';
+      try {
+        const res = await fetch(`/api/heroes/${hero._id}/unlock-ability`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ abilityId }),
+        });
+        const data = await res.json();
+        if (data.hero) {
+          hero = data.hero;
+          (btn as HTMLElement).textContent = '✅ Изучено';
+          (btn as HTMLElement).classList.add('learned');
+          (btn as HTMLElement).style.pointerEvents = 'none';
+        } else {
+          (btn as HTMLElement).textContent = data.error || 'Ошибка';
+        }
+      } catch { (btn as HTMLElement).textContent = 'Изучить'; }
+    });
+  });
+
+  document.getElementById('levelup-done')?.addEventListener('click', () => {
+    overlay.remove();
+    renderInventoryScreen(container);
+  });
 }
