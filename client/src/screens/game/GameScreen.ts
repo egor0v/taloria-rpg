@@ -1013,12 +1013,9 @@ function setupMenu(isSolo: boolean) {
   document.getElementById('btn-menu')?.addEventListener('click', () => {
     document.getElementById('menu-overlay')!.style.display = 'flex';
   });
-  document.getElementById('menu-close')?.addEventListener('click', () => {
-    document.getElementById('menu-overlay')!.style.display = 'none';
-  });
 
   // Global X close buttons on all popups
-  container.querySelectorAll('.popup-x-close').forEach(btn => {
+  document.querySelectorAll('.popup-x-close').forEach(btn => {
     btn.addEventListener('click', () => {
       const targetId = (btn as HTMLElement).dataset.close;
       if (targetId) {
