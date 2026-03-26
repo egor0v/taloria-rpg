@@ -94,10 +94,32 @@ export async function renderScenario(container: HTMLElement): Promise<void> {
       // Show action buttons
       const actions = document.getElementById('scn-actions')!;
       actions.innerHTML = `
+        <div class="scn-visibility-toggle">
+          <label class="scn-vis-option">
+            <input type="radio" name="scn-vis" value="public" checked />
+            <span class="scn-vis-chip scn-vis-chip--open">🔓 Открытая</span>
+          </label>
+          <label class="scn-vis-option">
+            <input type="radio" name="scn-vis" value="private" />
+            <span class="scn-vis-chip scn-vis-chip--closed">🔒 Закрытая</span>
+          </label>
+          <span class="scn-vis-hint" id="scn-vis-hint">Наблюдатели могут смотреть игру</span>
+        </div>
         <button class="scn-cancel-btn" id="btn-cancel-select">ОТМЕНА</button>
         <button class="scn-solo-btn" id="btn-solo">⚔ ИГРАТЬ ОДНОМУ</button>
         <button class="scn-multi-btn" id="btn-multi">👥 ИГРАТЬ С ДРУЗЬЯМИ</button>
       `;
+
+      // Toggle hint text
+      actions.querySelectorAll('input[name="scn-vis"]').forEach(r => {
+        r.addEventListener('change', () => {
+          const hint = document.getElementById('scn-vis-hint');
+          const val = (actions.querySelector('input[name="scn-vis"]:checked') as HTMLInputElement)?.value;
+          if (hint) hint.textContent = val === 'public' ? 'Наблюдатели могут смотреть игру' : 'Только приглашённые игроки';
+        });
+      });
+
+      const getIsPublic = () => (actions.querySelector('input[name="scn-vis"]:checked') as HTMLInputElement)?.value === 'public';
 
       document.getElementById('btn-cancel-select')?.addEventListener('click', () => {
         selectedScenarioId = null;
@@ -108,9 +130,8 @@ export async function renderScenario(container: HTMLElement): Promise<void> {
       document.getElementById('btn-solo')?.addEventListener('click', async () => {
         if (!selectedHero) return alert('Сначала создайте героя');
         try {
-          const data = await api.post('/api/sessions', { scenarioId: selectedScenarioId, heroId: selectedHero._id, maxPlayers: 1 });
+          const data = await api.post('/api/sessions', { scenarioId: selectedScenarioId, heroId: selectedHero._id, maxPlayers: 1, isPublic: getIsPublic() });
           if (!data.session) throw { error: 'Сервер не вернул сессию' };
-          // Set to playing immediately for solo
           await api.patch(`/api/sessions/${data.session._id}/status`, { status: 'playing' });
           sessionStorage.setItem('current_session', JSON.stringify({ ...data.session, status: 'playing', scenarioName: data.session.scenarioId }));
           window.location.href = `/game/${data.session._id}`;
@@ -123,7 +144,7 @@ export async function renderScenario(container: HTMLElement): Promise<void> {
       document.getElementById('btn-multi')?.addEventListener('click', async () => {
         if (!selectedHero) return alert('Сначала создайте героя');
         try {
-          const data = await api.post('/api/sessions', { scenarioId: selectedScenarioId, heroId: selectedHero._id, maxPlayers: 4 });
+          const data = await api.post('/api/sessions', { scenarioId: selectedScenarioId, heroId: selectedHero._id, maxPlayers: 4, isPublic: getIsPublic() });
           sessionStorage.setItem('current_session', JSON.stringify(data.session));
           navigateTo('/lobby');
         } catch (err: any) { alert(err.error || 'Ошибка'); }
@@ -233,7 +254,16 @@ function addScenarioStyles() {
 
     .scn-hero-info { text-align: center; color: var(--text-dim); font-size: 0.88rem; margin-bottom: 20px; padding: 12px; }
 
-    .scn-actions { display: flex; justify-content: center; gap: 12px; padding: 16px 0 40px; }
+    .scn-actions { display: flex; justify-content: center; gap: 12px; padding: 16px 0 40px; flex-wrap: wrap; align-items: center; }
+    .scn-visibility-toggle { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: center; margin-bottom: 8px; }
+    .scn-vis-option { cursor: pointer; }
+    .scn-vis-option input { display: none; }
+    .scn-vis-chip { padding: 8px 16px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; font-family: var(--font-body); border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s; }
+    .scn-vis-chip--open { color: #3acc60; }
+    .scn-vis-chip--closed { color: #ff6b6b; }
+    .scn-vis-option input:checked + .scn-vis-chip--open { background: rgba(58,204,96,0.15); border-color: rgba(58,204,96,0.4); }
+    .scn-vis-option input:checked + .scn-vis-chip--closed { background: rgba(255,107,107,0.15); border-color: rgba(255,107,107,0.4); }
+    .scn-vis-hint { font-size: 0.72rem; color: var(--text-dim); font-style: italic; }
     .scn-cancel-btn { background: none; border: 1px solid rgba(255,255,255,0.12); color: var(--text-dim); padding: 12px 28px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 600; font-family: var(--font-body); letter-spacing: 0.04em; }
     .scn-cancel-btn:hover { border-color: rgba(255,255,255,0.25); color: var(--text); }
     .scn-solo-btn { background: linear-gradient(135deg, #e8c85a, #c9a24e); color: #1a1500; border: none; padding: 12px 28px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 700; font-family: var(--font-body); letter-spacing: 0.04em; transition: all 0.2s; }

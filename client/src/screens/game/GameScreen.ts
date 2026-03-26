@@ -439,6 +439,9 @@ function buildHTML(isSolo: boolean): string {
         <label class="menu-toggle"><input type="checkbox" id="toggle-sound" ${soundEnabled ? 'checked' : ''} /><span>🔊 Звук</span></label>
         <label class="menu-toggle"><input type="checkbox" id="toggle-ai" ${aiEnabled ? 'checked' : ''} /><span>🤖 AI-ведущий</span></label>
       </div>
+      <div class="menu-section"><h4>Доступ</h4>
+        <label class="menu-toggle"><input type="checkbox" id="toggle-public" ${session.isPublic !== false ? 'checked' : ''} /><span>🔓 Открытая игра (наблюдатели)</span></label>
+      </div>
       <div class="menu-buttons">
         ${session.maxPlayers === 1 ? '<button class="menu-btn menu-btn--warning" id="menu-restart">🔄 Начать сначала</button>' : ''}
         <button class="menu-btn menu-btn--primary" id="menu-save-exit">💾 Сохранить и выйти</button>
@@ -1476,6 +1479,18 @@ function setupMenu(isSolo: boolean) {
     sock?.disconnect();
     sessionStorage.removeItem('current_session');
     navigateTo('/dashboard');
+  });
+
+  // Toggle public/private — kick spectators when closing
+  document.getElementById('toggle-public')?.addEventListener('change', (e) => {
+    const isPublic = (e.target as HTMLInputElement).checked;
+    session.isPublic = isPublic;
+    sock?.emit('toggle-public', { isPublic });
+    if (!isPublic) {
+      log('🔒 Игра закрыта — наблюдатели исключены', 'system');
+    } else {
+      log('🔓 Игра открыта — наблюдатели могут присоединяться', 'system');
+    }
   });
 }
 

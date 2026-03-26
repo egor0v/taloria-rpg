@@ -29,6 +29,7 @@ const gameSessionSchema = new mongoose.Schema(
 
     gameState: { type: mongoose.Schema.Types.Mixed, default: {} },
     maxPlayers: { type: Number, default: 4 },
+    isPublic: { type: Boolean, default: true },
     spectatorCount: { type: Number, default: 0 },
   },
   {

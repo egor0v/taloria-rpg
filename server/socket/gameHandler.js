@@ -423,12 +423,51 @@ function setupGameHandler(io) {
       }
     });
 
+    // --- Toggle public/private ---
+    socket.on('toggle-public', async ({ isPublic }) => {
+      const sid = socket.sessionId;
+      if (!sid) return;
+      try {
+        const session = await GameSession.findById(sid);
+        if (!session) return;
+        // Only host can toggle
+        if (session.hostUserId?.toString() !== socket.userId) return;
+
+        session.isPublic = isPublic;
+        await session.save();
+
+        if (!isPublic) {
+          // Kick all spectators
+          const room = gameNsp.adapter.rooms.get(`session:${sid}`);
+          if (room) {
+            for (const sockId of [...room]) {
+              const s = gameNsp.sockets.get(sockId);
+              if (s?.isSpectator) {
+                s.emit('kicked', { reason: 'Игра закрыта для наблюдателей' });
+                s.leave(`session:${sid}`);
+                s.disconnect(true);
+              }
+            }
+          }
+        }
+
+        gameNsp.to(`session:${sid}`).emit('visibility-changed', { isPublic });
+      } catch (err) {
+        console.error('toggle-public error:', err);
+      }
+    });
+
     // --- Join as spectator ---
     socket.on('join-as-spectator', async ({ sessionId, displayName }) => {
       if (!sessionId) return;
       try {
         const session = await GameSession.findById(sessionId);
         if (!session) return socket.emit('error', { message: 'Сессия не найдена' });
+
+        // Check if game is public
+        if (session.isPublic === false) {
+          return socket.emit('error', { message: 'Игра закрыта для наблюдателей' });
+        }
 
         socket.join(`session:${sessionId}`);
         socket.sessionId = sessionId;
