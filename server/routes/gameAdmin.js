@@ -7,6 +7,7 @@ const Scenario = require('../models/Scenario');
 const MonsterTemplate = require('../models/MonsterTemplate');
 const GameItem = require('../models/GameItem');
 const AbilityTemplate = require('../models/AbilityTemplate');
+const FriendlyNpc = require('../models/FriendlyNpc');
 const config = require('../config');
 
 const router = express.Router();
@@ -43,6 +44,9 @@ function createCRUD(Model, uniqueField) {
           ...(Model.schema.paths.abilityId ? [{ abilityId: regex }] : []),
           ...(Model.schema.paths.scenarioId ? [{ scenarioId: regex }] : []),
           ...(Model.schema.paths.slug ? [{ slug: regex }] : []),
+          ...(Model.schema.paths.npcId ? [{ npcId: regex }] : []),
+          ...(Model.schema.paths.locationId ? [{ locationId: regex }] : []),
+          ...(Model.schema.paths.role ? [{ role: regex }] : []),
         ];
       }
       // Extra filters for items
@@ -104,6 +108,7 @@ router.use('/scenarios', createCRUD(Scenario, 'scenarioId'));
 router.use('/monsters', createCRUD(MonsterTemplate, 'type'));
 router.use('/items', createCRUD(GameItem, 'itemId'));
 router.use('/abilities', createCRUD(AbilityTemplate, 'abilityId'));
+router.use('/friendly-npcs', createCRUD(FriendlyNpc, 'npcId'));
 
 // File upload endpoint
 router.post('/upload', adminAuth(), upload.single('file'), (req, res) => {

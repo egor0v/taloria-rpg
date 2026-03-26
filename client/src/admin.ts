@@ -80,6 +80,7 @@ function renderAdmin() {
           <button class="nav-btn" data-panel="monsters">👹 Монстры</button>
           <button class="nav-btn" data-panel="items">🎒 Предметы</button>
           <button class="nav-btn" data-panel="abilities">✨ Способности</button>
+          <button class="nav-btn" data-panel="friendly-npcs">🧝 Мирные НПС</button>
         </nav>
         <div class="sidebar-footer">
           <a href="/" class="back-link">← На сайт</a>
@@ -130,6 +131,7 @@ async function loadPanel(panel: string) {
       case 'monsters': await loadGameCrud(el, '/api/admin/game/monsters', 'Монстры', FIELDS_MONSTER); break;
       case 'items': await loadItemsPanel(el); break;
       case 'abilities': await loadGameCrud(el, '/api/admin/game/abilities', 'Способности', FIELDS_ABILITY); break;
+      case 'friendly-npcs': await loadGameCrud(el, '/api/admin/game/friendly-npcs', 'Мирные НПС', FIELDS_FRIENDLY_NPC); break;
     }
   } catch (err: any) {
     el.innerHTML = `<p class="error">Ошибка: ${err.error || err.message || JSON.stringify(err)}</p>`;
@@ -213,6 +215,29 @@ const FIELDS_MONSTER: FieldDef[] = [
   { key: 'abilities', label: 'Способности (JSON)', type: 'json' },
   { key: 'img', label: 'Изображение (URL)', type: 'text' },
   { key: 'tokenImg', label: 'Токен (URL)', type: 'text' },
+  { key: 'active', label: 'Активен', type: 'checkbox', tableCol: true },
+];
+
+const FIELDS_FRIENDLY_NPC: FieldDef[] = [
+  { key: 'npcId', label: 'ID (уникальный)', type: 'text', required: true, tableCol: true },
+  { key: 'name', label: 'Имя', type: 'text', required: true, tableCol: true },
+  { key: 'label', label: 'Эмодзи', type: 'text' },
+  { key: 'role', label: 'Роль', type: 'select', options: ['trader', 'quest', 'guide', 'guard', 'healer', 'blacksmith', 'alchemist', 'herbalist', 'scribe', 'jeweler', 'tailor', 'innkeeper', 'priest', 'wanderer', 'other'], tableCol: true },
+  { key: 'locationId', label: 'Локация (город)', type: 'select', options: ['', 'tavern-1', 'tavern-2', 'tavern-3', 'tavern-4', 'smithy', 'temple', 'alchemist', 'herbalist', 'shop-1', 'shop-2', 'shop-3', 'shop-4', 'main-shop', 'gates'], tableCol: true },
+  { key: 'hp', label: 'HP', type: 'number' },
+  { key: 'armor', label: 'Броня', type: 'number' },
+  { key: 'attack', label: 'Атака', type: 'number' },
+  { key: 'agility', label: 'Ловкость', type: 'number' },
+  { key: 'canTalk', label: 'Может говорить', type: 'checkbox' },
+  { key: 'isTrader', label: 'Торговец', type: 'checkbox', tableCol: true },
+  { key: 'isQuestNpc', label: 'Квестовый НПС', type: 'checkbox' },
+  { key: 'greeting', label: 'Приветствие', type: 'textarea' },
+  { key: 'description', label: 'Описание', type: 'textarea' },
+  { key: 'shopItems', label: 'Товары (JSON массив itemId)', type: 'json' },
+  { key: 'thematicTypes', label: 'Тематические типы (JSON)', type: 'json' },
+  { key: 'dialogTree', label: 'Дерево диалогов (JSON)', type: 'json' },
+  { key: 'img', label: 'Изображение (URL)', type: 'text' },
+  { key: 'tokenImg', label: 'Токен/иконка (URL)', type: 'text' },
   { key: 'active', label: 'Активен', type: 'checkbox', tableCol: true },
 ];
 
