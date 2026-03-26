@@ -14,7 +14,7 @@ function escapeRegex(str) {
 const TAB_MAP = {
   monsters: { model: MonsterTemplate, filter: {} },
   spells: { model: AbilityTemplate, filter: { type: { $in: ['class_ability', 'skill', 'spell'] } } },
-  abilities: { model: AbilityTemplate, filter: { type: 'class_ability' } },
+  abilities: { model: AbilityTemplate, filter: {} },
   potions: { model: GameItem, filter: { type: 'potion' } },
   weapons: { model: GameItem, filter: { type: 'weapon' } },
   artifacts: { model: GameItem, filter: { type: { $in: ['jewelry', 'shield'] } } },
