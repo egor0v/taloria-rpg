@@ -1,6 +1,6 @@
 /**
  * GameScreen — Complete game UI for Taloria RPG
- * Built from game-implementation-guide.md
+ * v2.5 — combat, spectators, abilities
  */
 import { clearElement } from '../../utils/safeRender';
 import { getGameSocket } from '../../core/socket';
@@ -948,8 +948,8 @@ async function loadAbilityDefs() {
   if (Object.keys(abilityDefsCache).length > 0) return;
   try {
     const data = await apiCall('/api/bestiary?tab=abilities&limit=500');
-    (data.data || []).forEach((a: any) => {
-      // Normalize field names from API
+    const items = data.data || data.abilities || (Array.isArray(data) ? data : []);
+    items.forEach((a: any) => {
       abilityDefsCache[a.abilityId] = {
         ...a,
         name: a.name || a.abilityId,
@@ -959,7 +959,10 @@ async function loadAbilityDefs() {
         range: a.range ?? 0,
       };
     });
-  } catch {}
+    console.log(`Loaded ${items.length} ability defs`);
+  } catch (err) {
+    console.error('Failed to load abilities:', err);
+  }
 }
 
 async function showAbilityPopup() {
@@ -975,9 +978,14 @@ async function showAbilityPopup() {
   const uniqueIds = [...new Set(abilityIds)];
   // Only show abilities that exist in cache AND are not passives/base abilities
   const activeAbilities = uniqueIds
-    .filter(id => abilityDefsCache[id] && !id.startsWith('passive_') && !id.startsWith('base_'))
-    .map(id => abilityDefsCache[id])
-    .filter(a => a.type !== 'passive' && a.type !== 'focus');
+    .filter(id => !id.startsWith('passive_') && !id.startsWith('base_'))
+    .map(id => {
+      const def = abilityDefsCache[id];
+      if (def) return def;
+      // Fallback: show with ID as name if not in cache
+      return { abilityId: id, name: id, description: '', manaCost: 0, type: 'unknown' };
+    })
+    .filter(a => a.type !== 'passive');
 
   const cooldowns = hero.cooldowns || {};
 
