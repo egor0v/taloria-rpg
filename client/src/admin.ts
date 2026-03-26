@@ -271,16 +271,21 @@ const FIELDS_ITEM: FieldDef[] = [
 const FIELDS_ABILITY: FieldDef[] = [
   { key: 'abilityId', label: 'ID способности', type: 'text', required: true, tableCol: true },
   { key: 'name', label: 'Название', type: 'text', required: true, tableCol: true },
-  { key: 'type', label: 'Тип', type: 'select', options: ['class_ability', 'skill', 'spell', 'focus', 'passive'], required: true, tableCol: true },
+  { key: 'type', label: 'Тип', type: 'select', options: ['class_ability', 'skill', 'spell', 'focus', 'passive', 'monster_ability'], required: true, tableCol: true },
   { key: 'cls', label: 'Класс', type: 'select', options: ['any', 'warrior', 'mage', 'priest', 'bard'], tableCol: true },
   { key: 'branch', label: 'Ветка', type: 'text' },
   { key: 'unlockLevel', label: 'Уровень разблокировки', type: 'number' },
   { key: 'manaCost', label: 'Стоимость маны', type: 'number' },
   { key: 'cooldown', label: 'Кулдаун (ходов)', type: 'number' },
+  { key: 'duration', label: 'Длительность (ходов)', type: 'number' },
+  { key: 'range', label: 'Радиус (клеток)', type: 'number' },
+  { key: 'targetType', label: 'Тип цели', type: 'select', options: ['target', 'area', 'self', 'ally', 'line'] },
   { key: 'description', label: 'Описание', type: 'textarea' },
+  { key: 'statuses', label: 'Накладываемые статусы', type: 'text' },
   { key: 'difficulty', label: 'Сложность (1-6)', type: 'number' },
   { key: 'pattern', label: 'Паттерн', type: 'text' },
   { key: 'effect', label: 'Эффект (JSON)', type: 'json' },
+  { key: 'icon', label: 'Иконка (emoji)', type: 'text' },
   { key: 'img', label: 'Изображение (URL)', type: 'text' },
   { key: 'active', label: 'Активна', type: 'checkbox', tableCol: true },
 ];
@@ -362,16 +367,30 @@ async function loadDashboard(el: HTMLElement) {
 // ===========================
 // GENERIC GAME CRUD
 // ===========================
-async function loadGameCrud(el: HTMLElement, apiUrl: string, title: string, fields: FieldDef[]) {
-  const data = await apiFetch(apiUrl);
-  const items = data.items || [];
+async function loadGameCrud(el: HTMLElement, apiUrl: string, title: string, fields: FieldDef[], page = 1) {
+  const limit = 50;
+  const sep = apiUrl.includes('?') ? '&' : '?';
+  const data = await apiFetch(`${apiUrl}${sep}page=${page}&limit=${limit}`);
+  const items = data.items || data.data || [];
+  const total = data.total || items.length;
+  const pages = data.pages || Math.ceil(total / limit);
   const tableCols = fields.filter(f => f.tableCol);
+
+  // Pagination HTML
+  const paginationHtml = pages > 1 ? `
+    <div class="crud-pagination">
+      ${page > 1 ? `<button class="btn-sm btn-page" data-page="${page - 1}">← Назад</button>` : ''}
+      <span class="page-info">Стр. ${page} из ${pages} (${total} шт.)</span>
+      ${page < pages ? `<button class="btn-sm btn-page" data-page="${page + 1}">Далее →</button>` : ''}
+    </div>
+  ` : '';
 
   el.innerHTML = `
     <div class="page-header">
-      <h2 class="page-title">${title} (${data.total || items.length})</h2>
+      <h2 class="page-title">${title} (${total})</h2>
       <button class="btn-primary" id="btn-add-new">+ Добавить</button>
     </div>
+    ${paginationHtml}
     <div class="table-wrap">
       <table class="data-table">
         <thead><tr>
@@ -391,7 +410,14 @@ async function loadGameCrud(el: HTMLElement, apiUrl: string, title: string, fiel
         </tbody>
       </table>
     </div>
+    ${paginationHtml}
   `;
+
+  // Pagination clicks
+  el.querySelectorAll('.btn-page').forEach(b => b.addEventListener('click', () => {
+    const p = parseInt((b as HTMLElement).dataset.page || '1');
+    loadGameCrud(el, apiUrl, title, fields, p);
+  }));
 
   document.getElementById('btn-add-new')?.addEventListener('click', () => openEditModal(apiUrl, fields, null, title));
   el.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', async () => {
@@ -407,7 +433,7 @@ async function loadGameCrud(el: HTMLElement, apiUrl: string, title: string, fiel
       alert('Ошибка: ' + (err.error || JSON.stringify(err)));
       return;
     }
-    loadPanel(currentPanel);
+    loadGameCrud(el, apiUrl, title, fields, page);
   }));
 }
 
