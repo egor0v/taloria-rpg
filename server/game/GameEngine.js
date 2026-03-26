@@ -211,6 +211,13 @@ class GameEngine {
         return this.validateSearch(hero, action);
       case 'magic-vision':
         return hero.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
+      case 'talk': {
+        const npc = this.gs.monsters.find(m => m.id === action.targetId && m.alive);
+        if (!npc) return { ok: false, error: 'НПС не найден' };
+        const dist = Math.abs(hero.row - npc.row) + Math.abs(hero.col - npc.col);
+        if (dist > NPC_INTERACT_RANGE) return { ok: false, error: 'Слишком далеко' };
+        return { ok: true };
+      }
       case 'free-action':
         return hero.bonusActionUsed ? { ok: false, error: 'Бонусное действие уже использовано' } : { ok: true };
       case 'loot-chest':
@@ -382,6 +389,9 @@ class GameEngine {
         break;
       case 'magic-vision':
         result = this.executeMagicVision(action);
+        break;
+      case 'talk':
+        result = this.executeTalk(action);
         break;
       case 'free-action':
         result = this.executeFreeAction(action);
@@ -976,6 +986,46 @@ class GameEngine {
   }
 
   // ============================================================
+  // TALK — conversation with NPC
+  // ============================================================
+
+  executeTalk(action) {
+    const hero = this.findHero(action.heroId);
+    const npc = this.gs.monsters.find(m => m.id === action.targetId && m.alive);
+    if (!npc) return { type: 'talk', success: false, message: 'НПС не найден' };
+
+    const dialog = npc.dialog || npc.greeting || '';
+    const name = npc.name || 'НПС';
+    const isTrader = npc.isTrader;
+    const isQuestNpc = npc.isQuestNpc;
+
+    // Get NPC's shop items if trader
+    let shopItems = [];
+    if (isTrader && npc.shopItems?.length) {
+      shopItems = npc.shopItems;
+    }
+
+    // Get dialog tree if exists
+    const dialogTree = npc.dialogTree || null;
+
+    this.addLog(`💬 ${hero.name} говорит с ${name}`, 'log-info');
+
+    return {
+      type: 'talk',
+      heroId: hero.id,
+      heroName: hero.name,
+      npcId: npc.id,
+      npcName: name,
+      dialog,
+      isTrader,
+      isQuestNpc,
+      shopItems,
+      dialogTree,
+      message: `${hero.name} говорит с ${name}`,
+    };
+  }
+
+  // ============================================================
   // LOOT CHEST — pick specific items or all
   // ============================================================
 
@@ -1032,18 +1082,27 @@ class GameEngine {
 
   validateInteract(hero, action) {
     if (this.gs.bonusActionUsed) return { ok: false, error: 'Доп. действие уже использовано' };
-    const { targetRow, targetCol } = action;
-    if (targetRow === undefined || targetCol === undefined) return { ok: false, error: 'Не указана цель' };
-    const dist = Math.abs(hero.row - targetRow) + Math.abs(hero.col - targetCol);
-    if (dist > NPC_INTERACT_RANGE) return { ok: false, error: `Объект слишком далеко (макс. ${NPC_INTERACT_RANGE} клетки)` };
-    const obj = this.gs.objects.find(o => o.row === targetRow && o.col === targetCol && !o.opened && !o.triggered && !o.activated);
+    // Find object by targetId or by coordinates
+    let obj;
+    if (action.targetId) {
+      obj = this.gs.objects.find(o => o.id === action.targetId && !o.opened && !o.triggered && !o.activated);
+    }
+    if (!obj) {
+      const { targetRow, targetCol } = action;
+      if (targetRow === undefined || targetCol === undefined) return { ok: false, error: 'Не указана цель' };
+      obj = this.gs.objects.find(o => o.row === targetRow && o.col === targetCol && !o.opened && !o.triggered && !o.activated);
+    }
     if (!obj) return { ok: false, error: 'Нет объекта для взаимодействия' };
+    const dist = Math.abs(hero.row - obj.row) + Math.abs(hero.col - obj.col);
+    if (dist > NPC_INTERACT_RANGE) return { ok: false, error: `Объект слишком далеко (макс. ${NPC_INTERACT_RANGE} клетки)` };
     return { ok: true };
   }
 
   async executeInteract(action) {
     const hero = this.findHero(action.heroId);
-    const obj = this.gs.objects.find(o => o.row === action.targetRow && o.col === action.targetCol && !o.opened && !o.triggered && !o.activated);
+    let obj;
+    if (action.targetId) obj = this.gs.objects.find(o => o.id === action.targetId && !o.opened && !o.triggered && !o.activated);
+    if (!obj) obj = this.gs.objects.find(o => o.row === action.targetRow && o.col === action.targetCol && !o.opened && !o.triggered && !o.activated);
     if (!obj) return { type: 'interact', success: false, message: 'Объект не найден' };
 
     const result = { type: 'interact', heroId: hero.id, heroName: hero.name, objectType: obj.type, objectId: obj.id };

@@ -84,6 +84,8 @@ export function renderGameScreen(container: HTMLElement): void {
     if (rolls.length > 0) { showDiceRollSequence(rolls); }
     // Chest popup
     if (data.result?.showChestPopup) { showChestLootPopup(data.result.chestId, data.result.loot); }
+    // NPC dialog popup
+    if (data.result?.type === 'talk' && data.result?.npcName) { showNpcDialogPopup(data.result); }
   });
   sock.on('action-error', (data: any) => log(`❌ ${data.error || data.message || 'Ошибка'}`, 'error'));
   sock.on('ai-narration', (data: any) => { setNarration(data.text); log(`📜 ${data.text}`, 'narration'); });
@@ -209,6 +211,16 @@ function buildHTML(isSolo: boolean): string {
       </div>
     </div>
   </div>` : ''}
+
+  <!-- NPC Dialog popup -->
+  <div class="game-popup-overlay" id="npc-dialog-popup" style="display:none">
+    <div class="game-popup npc-dialog-content">
+      <span class="popup-x-close" data-close="npc-dialog-popup">✕</span>
+      <div id="npc-dialog-header" class="npc-dialog-header"></div>
+      <div id="npc-dialog-text" class="npc-dialog-text"></div>
+      <div id="npc-dialog-actions" class="npc-dialog-actions"></div>
+    </div>
+  </div>
 
   <!-- Chest loot popup -->
   <div class="game-popup-overlay" id="chest-popup" style="display:none">
@@ -561,10 +573,10 @@ function onCellClick(x: number, y: number) {
     return;
   }
 
-  // Click on friendly NPC/monster → interact
+  // Click on friendly NPC/monster → talk
   const friendlyNpc = gs.monsters?.find((m: any) => m.alive && m.friendly && m.col === x && m.row === y);
   if (friendlyNpc) {
-    sock.emit('action-request', { type: 'interact', targetId: friendlyNpc.id });
+    sock.emit('action-request', { type: 'talk', targetId: friendlyNpc.id });
     return;
   }
 
@@ -1127,7 +1139,7 @@ function showNpcHover(npc: any, e: MouseEvent, inRange: boolean) {
   // Button handlers
   popup.querySelector('.npc-hover-talk')?.addEventListener('click', () => {
     popup.remove();
-    sock?.emit('action-request', { type: 'interact', targetId: npc.id });
+    sock?.emit('action-request', { type: 'talk', targetId: npc.id });
   });
   popup.querySelector('.npc-hover-attack')?.addEventListener('click', () => {
     popup.remove();
@@ -1319,11 +1331,62 @@ function fmtAction(data: any): string {
     case 'sneak': return r.success ? `🥷 Скрытность! (d20=${r.roll}+${r.bonus}=${r.total} ≥ ${r.dc})` : `🥷 Замечен (d20=${r.roll}+${r.bonus}=${r.total} < ${r.dc})`;
     case 'use-item': return `🧪 ${r.itemName}: ${r.healing ? '+' + r.healing + ' HP' : ''}${r.manaRestored ? '+' + r.manaRestored + ' MP' : ''}`;
     case 'ability': return `✨ ${r.abilityName || 'Способность'}${r.healing ? ': +' + r.healing + ' HP' : ''}${r.damage ? ': ' + r.damage + ' урона' : ''}${r.shield ? ': щит +' + r.shield : ''} (${r.manaCost} MP)`;
-    case 'interact': return `🤝 ${r.type === 'chest' ? '📦 Сундук: ' + (r.loot?.length || 0) + ' предметов' : r.message || r.name || 'Взаимодействие'}`;
+    case 'talk': return `💬 ${r.heroName || 'Герой'} → ${r.npcName || 'НПС'}`;
+    case 'interact': return `🤝 ${r.objectType === 'chest' ? '📦 Сундук' : r.message || r.name || 'Взаимодействие'}`;
     case 'loot': return `🎁 ${r.targetName}: ${r.loot?.length || 0} предметов`;
     case 'combat-start': return `⚔ БОЙ! Порядок: ${r.turnOrder?.map((t: any) => t.name).join(' → ')}`;
     default: return `⚡ ${r.type || data.action?.type || 'Действие'}`;
   }
+}
+
+// ═══════════════════════════════════
+// NPC DIALOG POPUP
+// ═══════════════════════════════════
+function showNpcDialogPopup(result: any) {
+  const popup = document.getElementById('npc-dialog-popup')!;
+  const header = document.getElementById('npc-dialog-header')!;
+  const text = document.getElementById('npc-dialog-text')!;
+  const actions = document.getElementById('npc-dialog-actions')!;
+
+  const npcData = npcDataStore.get(result.npcId) || {};
+  const previewImg = npcData.hoverImg || npcData.tokenImg;
+
+  header.innerHTML = `
+    ${previewImg ? `<img src="${previewImg}" class="npc-dialog-portrait" alt="" />` : ''}
+    <div class="npc-dialog-name-wrap">
+      <span class="npc-dialog-name">${result.npcName}</span>
+      <span class="npc-dialog-type">${result.isTrader ? 'Торговец' : result.isQuestNpc ? 'Квестовый НПС' : 'НПС'}</span>
+    </div>
+  `;
+
+  text.innerHTML = result.dialog
+    ? `<p>${result.dialog}</p>`
+    : `<p style="color:var(--text-dim);font-style:italic">${result.npcName} кивает вам.</p>`;
+
+  let actionsHtml = '';
+  if (result.dialogTree?.length) {
+    actionsHtml = result.dialogTree.map((opt: any, i: number) =>
+      `<button class="npc-dialog-option" data-idx="${i}">${opt.text || opt.label}</button>`
+    ).join('');
+  }
+  if (result.isTrader) {
+    actionsHtml += `<button class="npc-dialog-option npc-dialog-trade">🛒 Торговать</button>`;
+  }
+  actions.innerHTML = actionsHtml;
+
+  popup.style.display = 'flex';
+
+  // Trade button
+  actions.querySelector('.npc-dialog-trade')?.addEventListener('click', () => {
+    popup.style.display = 'none';
+    // TODO: open in-game trade interface
+    log(`🛒 Торговля с ${result.npcName} (в разработке)`, 'system');
+  });
+
+  // X close handler
+  popup.querySelector('.popup-x-close')?.addEventListener('click', () => {
+    popup.style.display = 'none';
+  });
 }
 
 // ═══════════════════════════════════
