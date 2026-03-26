@@ -210,6 +210,15 @@ export async function renderCityLobby(container: HTMLElement, locationId: string
       return;
     }
 
+    // "Покажи товары" — open shop directly
+    if (choice === 'Покажи товары' || choice === 'Показать товары' || choice === 'Торговля') {
+      document.getElementById('dialog-overlay')?.classList.add('hidden');
+      document.getElementById('shop-overlay')?.classList.remove('hidden');
+      const firstTab = document.querySelector('.lobby-shop-tab.active') as HTMLElement;
+      if (firstTab) loadShopItems(locationId, firstTab.dataset.shopTab!);
+      return;
+    }
+
     // Add player message
     const messagesEl = document.getElementById('dialog-messages')!;
     messagesEl.innerHTML += `<div class="dialog-msg dialog-msg--player"><span class="dialog-msg-name">${currentHero?.name || 'Вы'}</span><p class="dialog-msg-text">${choice}</p></div>`;
