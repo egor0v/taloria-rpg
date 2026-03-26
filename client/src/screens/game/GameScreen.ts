@@ -1246,16 +1246,19 @@ function setupMenu(isSolo: boolean) {
       if (res.session) {
         await apiCall(`/api/sessions/${res.session._id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'playing' }) });
         sessionStorage.setItem('current_session', JSON.stringify({ ...res.session, status: 'playing', scenarioName: session.scenarioName }));
-        window.location.href = '/game';
+        // Full page reload to reinitialize everything cleanly
+        window.location.replace('/game');
+        window.location.reload();
       }
     } catch (e: any) { log(`❌ Ошибка рестарта: ${e.error || e.message || ''}`, 'error'); }
-    document.getElementById('menu-overlay')!.style.display = 'none';
+    const menuOvl = document.getElementById('menu-overlay');
+    if (menuOvl) menuOvl.style.display = 'none';
   });
   document.getElementById('menu-save-exit')?.addEventListener('click', () => {
     sock?.emit('save-game', {});
     sock?.disconnect();
     sessionStorage.removeItem('current_session');
-    setTimeout(() => { window.location.href = '/dashboard'; }, 300);
+    setTimeout(() => { navigateTo('/dashboard'); }, 300);
   });
   document.getElementById('menu-exit-nosave')?.addEventListener('click', async () => {
     if (!confirm('Выйти? Прогресс потерян, игра прервана.')) return;
@@ -1264,7 +1267,7 @@ function setupMenu(isSolo: boolean) {
     } catch {}
     sock?.disconnect();
     sessionStorage.removeItem('current_session');
-    window.location.href = '/dashboard';
+    navigateTo('/dashboard');
   });
 }
 
