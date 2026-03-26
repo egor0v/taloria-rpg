@@ -72,15 +72,7 @@ export async function renderCityLobby(container: HTMLElement, locationId: string
           </div>
         </div>
 
-        <!-- Right: Chat -->
-        <div class="lobby-chat-panel">
-          <h4 class="lobby-panel-title">Чат</h4>
-          <div class="lobby-chat-messages" id="chat-messages"></div>
-          <div class="lobby-chat-input">
-            <input type="text" class="input" id="chat-input" placeholder="Сообщение..." maxlength="200" />
-            <button class="btn btn-primary btn-sm" id="btn-send-chat">↵</button>
-          </div>
-        </div>
+        <!-- Chat removed from lobby — appears only in NPC dialog or player DM popups -->
       </div>
 
       <!-- NPC Interaction Menu -->
