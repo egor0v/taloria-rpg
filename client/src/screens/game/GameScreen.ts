@@ -17,8 +17,8 @@ const MAX_ZOOM = 2.5;
 const MIN_ZOOM_FLOOR = 0.15;
 const ZOOM_STEP_BTN = 0.15;
 const ZOOM_STEP_WHEEL = 0.1;
-const DICE_SHAKE_ITERATIONS = 15;
-const DICE_ANIMATION_INTERVAL_MS = 80;
+const DICE_SHAKE_ITERATIONS = 40;
+const DICE_ANIMATION_INTERVAL_MS = 35;
 const DICE_RESULT_TIMEOUT_MS = 2500;
 const POPUP_OFFSET_X = 12;
 const POPUP_OFFSET_Y = -20;
@@ -193,6 +193,7 @@ function buildHTML(isSolo: boolean): string {
   <!-- Marker popup (multiplayer only) -->
   ${!isSolo ? `<div class="game-popup-overlay" id="marker-popup" style="display:none">
     <div class="game-popup marker-popup-content">
+      <span class="popup-x-close" data-close="marker-popup">✕</span>
       <h3>Установить метку</h3>
       <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:12px">Выберите тип метки и кликните на клетку карты</p>
       <div class="marker-types" id="marker-types">
@@ -206,21 +207,18 @@ function buildHTML(isSolo: boolean): string {
         <label style="color:var(--text-dim);font-size:0.85rem">Кто видит:</label>
         <div id="marker-vis-list" class="marker-vis-list"></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
-        <button class="popup-close" id="marker-cancel">Отмена</button>
-      </div>
     </div>
   </div>` : ''}
 
   <!-- Chest loot popup -->
   <div class="game-popup-overlay" id="chest-popup" style="display:none">
     <div class="game-popup chest-popup-content">
+      <span class="popup-x-close" data-close="chest-popup">✕</span>
       <h3>📦 Содержимое сундука</h3>
       <div id="chest-silver" class="chest-silver"></div>
       <div id="chest-items" class="chest-items-list"></div>
       <div class="chest-popup-actions">
         <button class="dice-popup-btn" id="chest-take-all">Забрать всё</button>
-        <button class="popup-close" id="chest-close">Закрыть</button>
       </div>
     </div>
   </div>
@@ -228,11 +226,11 @@ function buildHTML(isSolo: boolean): string {
   <!-- Free action popup -->
   <div class="game-popup-overlay" id="free-action-popup" style="display:none">
     <div class="game-popup">
+      <span class="popup-x-close" data-close="free-action-popup">✕</span>
       <h3>Свободное действие</h3>
       <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:12px">Опишите что хотите сделать. AI-мастер обработает ваше действие.</p>
       <textarea id="free-action-text" class="free-action-textarea" rows="4" placeholder="Осмотреть стену на наличие скрытого прохода..."></textarea>
       <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
-        <button class="popup-close" id="free-action-cancel">Отмена</button>
         <button class="dice-popup-btn" id="free-action-send">Выполнить</button>
       </div>
     </div>
@@ -241,6 +239,7 @@ function buildHTML(isSolo: boolean): string {
   <!-- Menu overlay -->
   <div class="game-menu-overlay" id="menu-overlay" style="display:none">
     <div class="game-menu-popup">
+      <span class="popup-x-close" data-close="menu-overlay">✕</span>
       <h3 class="menu-title">⚙ Меню</h3>
       <div class="menu-section"><h4>Настройки</h4>
         <label class="menu-toggle"><input type="checkbox" id="toggle-sound" ${soundEnabled ? 'checked' : ''} /><span>🔊 Звук</span></label>
@@ -250,31 +249,29 @@ function buildHTML(isSolo: boolean): string {
         ${session.maxPlayers === 1 ? '<button class="menu-btn menu-btn--warning" id="menu-restart">🔄 Начать сначала</button>' : ''}
         <button class="menu-btn menu-btn--primary" id="menu-save-exit">💾 Сохранить и выйти</button>
         <button class="menu-btn menu-btn--danger" id="menu-exit-nosave">🚪 Выйти без сохранения</button>
-        <button class="menu-btn" id="menu-close">✕ Закрыть</button>
       </div>
     </div>
   </div>
 
   <!-- Ability popup -->
   <div class="game-popup-overlay" id="ability-popup" style="display:none">
-    <div class="game-popup"><h3>Выберите способность</h3><div id="ability-list" class="ability-select-list"></div><button class="popup-close" id="ability-close">Отмена</button></div>
+    <div class="game-popup"><span class="popup-x-close" data-close="ability-popup">✕</span><h3>Выберите способность</h3><div id="ability-list" class="ability-select-list"></div></div>
   </div>
 
   <!-- Item popup -->
   <div class="game-popup-overlay" id="item-popup" style="display:none">
-    <div class="game-popup"><h3>Использовать предмет</h3><div id="item-list" class="item-select-list"></div><button class="popup-close" id="item-close">Отмена</button></div>
+    <div class="game-popup"><span class="popup-x-close" data-close="item-popup">✕</span><h3>Использовать предмет</h3><div id="item-list" class="item-select-list"></div></div>
   </div>
 
   <!-- Interact popup -->
   <div class="game-popup-overlay" id="interact-popup" style="display:none">
-    <div class="game-popup"><h3>Действие</h3>
+    <div class="game-popup"><span class="popup-x-close" data-close="interact-popup">✕</span><h3>Действие</h3>
       <div class="interact-buttons">
         <button class="interact-btn" data-action="search">🔍 Разведка</button>
         <button class="interact-btn" data-action="free-action">💬 Свободное действие</button>
         <button class="interact-btn" data-action="sneak">🥷 Подкрасться</button>
         <button class="interact-btn" data-action="rest">🛌 Отдых (+15% HP)</button>
       </div>
-      <button class="popup-close" id="interact-close">Отмена</button>
     </div>
   </div>
 
@@ -467,13 +464,13 @@ function renderMap() {
           <span class="token-hp-bar" style="width:${Math.round(hero.hp / hero.maxHp * 100)}%"></span>
         </div>`;
       } else if (showMonster) {
-        npcDataStore.set(monster.id, { id: monster.id, name: monster.name, hp: monster.hp, maxHp: monster.maxHp, type: monster.type, canTalk: monster.canTalk, friendly: false, label: monster.label || '👹', tokenImg: monster.tokenImg });
+        npcDataStore.set(monster.id, { id: monster.id, name: monster.name, hp: monster.hp, maxHp: monster.maxHp, type: monster.type, canTalk: monster.canTalk, friendly: false, label: monster.label || '👹', tokenImg: monster.tokenImg, hoverImg: monster.hoverImg || monster.tokenImg });
         content = `<div class="token token-monster" data-npc-id="${monster.id}" title="${monster.name}">
           ${monster.tokenImg ? `<img src="${monster.tokenImg}" class="token-img" alt="" />` : '👹'}
           <span class="token-hp-bar token-hp-monster" style="width:${Math.round(monster.hp / monster.maxHp * 100)}%"></span>
         </div>`;
       } else if (friendlyNpc) {
-        npcDataStore.set(friendlyNpc.id, { id: friendlyNpc.id, name: friendlyNpc.name, hp: friendlyNpc.hp, maxHp: friendlyNpc.maxHp, type: friendlyNpc.type, canTalk: friendlyNpc.canTalk, friendly: true, label: friendlyNpc.label || '🧝', isTrader: friendlyNpc.isTrader, isQuestNpc: friendlyNpc.isQuestNpc });
+        npcDataStore.set(friendlyNpc.id, { id: friendlyNpc.id, name: friendlyNpc.name, hp: friendlyNpc.hp, maxHp: friendlyNpc.maxHp, type: friendlyNpc.type, canTalk: friendlyNpc.canTalk, friendly: true, label: friendlyNpc.label || '🧝', isTrader: friendlyNpc.isTrader, isQuestNpc: friendlyNpc.isQuestNpc, hoverImg: friendlyNpc.hoverImg || friendlyNpc.tokenImg });
         content = `<span class="token-object token-npc" data-npc-id="${friendlyNpc.id}" title="${friendlyNpc.name}">${friendlyNpc.label || '🧝'}</span>`;
       } else if (obj && fogV > 0) {
         const imgSrc = OBJ_IMAGES[obj.type];
@@ -965,6 +962,17 @@ function setupMenu(isSolo: boolean) {
   document.getElementById('menu-close')?.addEventListener('click', () => {
     document.getElementById('menu-overlay')!.style.display = 'none';
   });
+
+  // Global X close buttons on all popups
+  container.querySelectorAll('.popup-x-close').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = (btn as HTMLElement).dataset.close;
+      if (targetId) {
+        const el = document.getElementById(targetId);
+        if (el) el.style.display = 'none';
+      }
+    });
+  });
   document.getElementById('toggle-sound')?.addEventListener('change', (e) => {
     soundEnabled = (e.target as HTMLInputElement).checked;
   });
@@ -1091,9 +1099,11 @@ function showNpcHover(npc: any, e: MouseEvent, inRange: boolean) {
   const popup = document.createElement('div');
   popup.id = 'npc-hover';
   popup.className = 'npc-hover-popup';
+  const previewImg = npc.hoverImg || npc.tokenImg;
+
   popup.innerHTML = `
+    ${previewImg ? `<div class="npc-hover-preview"><img src="${previewImg}" alt="${npc.name}" class="npc-hover-preview-img" /></div>` : ''}
     <div class="npc-hover-header">
-      <span class="npc-hover-icon">${npc.tokenImg ? `<img src="${npc.tokenImg}" class="npc-hover-img" />` : (npc.label || '👹')}</span>
       <div>
         <div class="npc-hover-name ${isFriendly ? 'npc-friendly' : 'npc-hostile'}">${npc.name}</div>
         <div class="npc-hover-type">${typeLabel}</div>

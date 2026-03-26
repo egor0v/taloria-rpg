@@ -802,10 +802,10 @@ function openEditModal(apiUrl: string, fields: FieldDef[], item: any | null, tit
                 <label>Выберите монстра: <select id="scenario-monster-type" class="sme-select"></select></label>
               </div>
               <div class="sme-entity-select" id="scenario-npc-name-wrap" style="display:none">
-                <label>Имя NPC: <input type="text" id="scenario-npc-name" class="sme-input" placeholder="Имя торговца/NPC" value="Торговец" /></label>
+                <label>Выберите мирного NPC: <select id="scenario-npc-select" class="sme-select"></select></label>
               </div>
               <div class="sme-entity-select" id="scenario-quest-npc-wrap" style="display:none">
-                <label>Имя квестового NPC: <input type="text" id="scenario-quest-npc-name" class="sme-input" placeholder="Пленник / Раненый воин" value="Пленник" /></label>
+                <label>Выберите квестового NPC: <select id="scenario-quest-npc-select" class="sme-select"></select></label>
               </div>
               <div class="grid-canvas-wrap" id="scenario-map-wrap" style="max-height:500px">
                 <div class="scenario-grid" id="scenario-map-grid" style="display:grid;gap:1px"></div>
@@ -1257,9 +1257,28 @@ function initScenarioMapEditor(modal: HTMLElement, item: any | null, fields: Fie
   const monsterSelectWrap = modal.querySelector('#scenario-monster-select') as HTMLElement;
   const monsterTypeSelect = modal.querySelector('#scenario-monster-type') as HTMLSelectElement;
   const npcNameWrap = modal.querySelector('#scenario-npc-name-wrap') as HTMLElement;
-  const npcNameInput = modal.querySelector('#scenario-npc-name') as HTMLInputElement;
+  const npcSelect = modal.querySelector('#scenario-npc-select') as HTMLSelectElement;
   const questNpcWrap = modal.querySelector('#scenario-quest-npc-wrap') as HTMLElement;
-  const questNpcNameInput = modal.querySelector('#scenario-quest-npc-name') as HTMLInputElement;
+  const questNpcSelect = modal.querySelector('#scenario-quest-npc-select') as HTMLSelectElement;
+
+  // Load friendly NPCs for dropdowns (async, populate when ready)
+  let friendlyNpcList: any[] = [];
+  (async () => {
+    try {
+      friendlyNpcList = await apiCall('/api/admin/game/friendly-npcs') as any[];
+    } catch {}
+    const regularNpcs = friendlyNpcList.filter((n: any) => !n.isQuestNpc);
+    const questNpcsList = friendlyNpcList.filter((n: any) => n.isQuestNpc);
+    if (npcSelect) {
+      npcSelect.innerHTML = regularNpcs.map((n: any) => `<option value="${n.npcId}">${n.name}${n.isTrader ? ' (торговец)' : ''}</option>`).join('')
+        + '<option value="_custom">+ Ввести имя вручную</option>';
+    }
+    if (questNpcSelect) {
+      questNpcSelect.innerHTML = questNpcsList.map((n: any) => `<option value="${n.npcId}">${n.name}</option>`).join('')
+        + regularNpcs.map((n: any) => `<option value="${n.npcId}">${n.name}</option>`).join('')
+        + '<option value="_custom">+ Ввести имя вручную</option>';
+    }
+  })();
   const placedListEl = modal.querySelector('#sme-placed-list') as HTMLElement;
   const docFileInput = modal.querySelector('#sme-doc-file') as HTMLInputElement;
   const docStatusEl = modal.querySelector('#sme-doc-status') as HTMLElement;
@@ -1498,10 +1517,24 @@ function initScenarioMapEditor(modal: HTMLElement, item: any | null, fields: Fie
         entity.label = m?.name || entity.monsterType;
       }
       if (currentBrush === 'npc') {
-        entity.label = npcNameInput?.value || 'Торговец';
+        const selVal = npcSelect?.value;
+        if (selVal === '_custom') {
+          entity.label = prompt('Введите имя NPC:') || 'Торговец';
+        } else {
+          const npcDef = friendlyNpcList.find((n: any) => n.npcId === selVal);
+          entity.label = npcDef?.name || 'Торговец';
+          entity.npcId = selVal;
+        }
       }
       if (currentBrush === 'questNpc') {
-        entity.label = questNpcNameInput?.value || 'Пленник';
+        const selVal = questNpcSelect?.value;
+        if (selVal === '_custom') {
+          entity.label = prompt('Введите имя квестового NPC:') || 'Пленник';
+        } else {
+          const npcDef = friendlyNpcList.find((n: any) => n.npcId === selVal);
+          entity.label = npcDef?.name || 'Пленник';
+          entity.npcId = selVal;
+        }
       }
       placements.push(entity);
     }
