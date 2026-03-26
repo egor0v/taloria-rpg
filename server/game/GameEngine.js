@@ -359,7 +359,7 @@ class GameEngine {
    * Main entry point — validates and executes action
    * @returns {{ error?: string, result?: Object }}
    */
-  processAction(userId, action) {
+  async processAction(userId, action) {
     const validation = this.validateAction(userId, action);
     if (!validation.ok) return { error: validation.error };
 
@@ -375,7 +375,7 @@ class GameEngine {
         result = this.executeAbility(action);
         break;
       case 'interact':
-        result = this.executeInteract(action);
+        result = await this.executeInteract(action);
         break;
       case 'search':
         result = this.executeSearch(action);
@@ -1041,22 +1041,34 @@ class GameEngine {
     return { ok: true };
   }
 
-  executeInteract(action) {
+  async executeInteract(action) {
     const hero = this.findHero(action.heroId);
     const obj = this.gs.objects.find(o => o.row === action.targetRow && o.col === action.targetCol && !o.opened && !o.triggered && !o.activated);
     if (!obj) return { type: 'interact', success: false, message: 'Объект не найден' };
 
-    // LootGenerator required at top of file
     const result = { type: 'interact', heroId: hero.id, heroName: hero.name, objectType: obj.type, objectId: obj.id };
 
     switch (obj.type) {
       case 'chest': {
-        // Generate loot but DON'T auto-add to inventory — let client choose
-        const loot = LootGenerator.generateChestLoot ? LootGenerator.generateChestLoot(obj.chestType || 'normal') : { items: [], silver: 10 };
-        obj.loot = loot; // Store loot on the object for later pickup
+        // Generate loot from weighted tables (async — queries DB for items)
+        const lootArray = await LootGenerator.generateChestLoot(obj.chestType || 'normal');
+        // Separate currency from items
+        const items = [];
+        let silver = 0;
+        let gold = 0;
+        for (const entry of lootArray) {
+          if (entry.type === 'currency') {
+            if (entry.currency === 'silver') silver += entry.amount;
+            else if (entry.currency === 'gold') gold += entry.amount;
+          } else {
+            items.push(entry);
+          }
+        }
+        const loot = { items, silver, gold };
+        obj.loot = loot;
         obj.openedBy = hero.id;
         result.loot = loot;
-        result.showChestPopup = true; // Flag for client to show chest UI
+        result.showChestPopup = true;
         result.chestId = obj.id;
         result.message = `${hero.name} открывает сундук!`;
         this.addLog(`📦 ${result.message}`, 'log-loot');

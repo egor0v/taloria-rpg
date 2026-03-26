@@ -248,7 +248,7 @@ function setupGameHandler(io) {
           if (!validation.ok) {
             return socket.emit('action-error', { error: validation.error });
           }
-          const processed = engine.processAction(userId, action);
+          const processed = await engine.processAction(userId, action);
           // processAction returns { result: {...} } or { error: '...' }
           if (processed.error) {
             return socket.emit('action-error', { error: processed.error });
