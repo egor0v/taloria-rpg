@@ -275,6 +275,16 @@ function buildHTML(isSolo: boolean): string {
       </div>
     </div>
 
+    <!-- Mission objective bar -->
+    <div class="mission-bar" id="mission-bar">
+      <div class="mission-bar-header" id="mission-bar-toggle">
+        <span class="mission-bar-icon">🎯</span>
+        <span class="mission-bar-label" id="mission-bar-label">Цель миссии</span>
+        <span class="mission-bar-arrow" id="mission-bar-arrow">▾</span>
+      </div>
+      <div class="mission-bar-body" id="mission-bar-body" style="display:none"></div>
+    </div>
+
     <!-- Map -->
     <div class="game-map-area" id="map-area">
       <div class="game-zoom">
@@ -490,9 +500,10 @@ function buildHTML(isSolo: boolean): string {
 // ═══════════════════════════════════
 function onUpdate() {
   if (!gs) return;
-  updateHUD();   // update actionMode BEFORE rendering highlights
+  updateHUD();
   renderMap();
   renderTeam();
+  updateMissionBar();
 }
 
 function updateHUD() {
@@ -1492,6 +1503,45 @@ function setupMenu(isSolo: boolean) {
       log('🔓 Игра открыта — наблюдатели могут присоединяться', 'system');
     }
   });
+}
+
+// ═══════════════════════════════════
+// MISSION BAR
+// ═══════════════════════════════════
+let missionBarInitialized = false;
+function updateMissionBar() {
+  if (!gs) return;
+  const label = document.getElementById('mission-bar-label');
+  const body = document.getElementById('mission-bar-body');
+  if (!label || !body) return;
+
+  const obj = gs.objectives || {};
+  const mainGoal = obj.main || gs.scenarioDescription || gs.briefing?.subtitle || '';
+  const bonusGoal = obj.bonus || '';
+
+  if (!mainGoal && !bonusGoal) {
+    const bar = document.getElementById('mission-bar');
+    if (bar) bar.style.display = 'none';
+    return;
+  }
+
+  label.textContent = mainGoal || 'Цель миссии';
+  body.innerHTML = `
+    ${mainGoal ? `<div class="mission-bar-item"><span class="mission-bar-tag">⚔ Основная:</span> ${mainGoal}</div>` : ''}
+    ${bonusGoal ? `<div class="mission-bar-item"><span class="mission-bar-tag">⭐ Бонусная:</span> ${bonusGoal}</div>` : ''}
+  `;
+
+  // Setup toggle once
+  if (!missionBarInitialized) {
+    missionBarInitialized = true;
+    document.getElementById('mission-bar-toggle')?.addEventListener('click', () => {
+      const b = document.getElementById('mission-bar-body')!;
+      const arrow = document.getElementById('mission-bar-arrow')!;
+      const expanded = b.style.display !== 'none';
+      b.style.display = expanded ? 'none' : 'block';
+      arrow.textContent = expanded ? '▾' : '▴';
+    });
+  }
 }
 
 // ═══════════════════════════════════

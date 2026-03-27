@@ -257,6 +257,30 @@
 .ginv-action-transfer { background: rgba(255,165,0,0.15) !important; border-color: rgba(255,165,0,0.3) !important; color: #ffa500 !important; }
 .ginv-action-transfer:hover { background: rgba(255,165,0,0.25) !important; }
 
+/* ─── Mission objective bar ─── */
+.mission-bar {
+  background: linear-gradient(90deg, rgba(201,162,78,0.08), rgba(20,18,14,0.95) 60%);
+  border-bottom: 1px solid rgba(201,162,78,0.15);
+  z-index: 10; flex-shrink: 0;
+}
+.mission-bar-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; cursor: pointer; user-select: none;
+  transition: background 0.15s;
+}
+.mission-bar-header:hover { background: rgba(201,162,78,0.06); }
+.mission-bar-icon { font-size: 0.85rem; }
+.mission-bar-label {
+  flex: 1; font-size: 0.8rem; color: var(--gold, #c9a24e);
+  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mission-bar-arrow { color: var(--text-dim, #9a9a9e); font-size: 0.7rem; transition: transform 0.2s; }
+.mission-bar-body {
+  padding: 6px 14px 10px 34px; border-top: 1px solid rgba(255,255,255,0.04);
+}
+.mission-bar-item { font-size: 0.78rem; color: var(--text-dim, #9a9a9e); padding: 3px 0; }
+.mission-bar-tag { color: var(--gold, #c9a24e); font-weight: 600; }
+
 /* ─── Golden X close button on all popups ─── */
 .popup-x-close {
   position: absolute; top: 12px; right: 14px;
