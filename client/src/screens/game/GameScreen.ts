@@ -242,7 +242,7 @@ function buildHTML(isSolo: boolean): string {
   <!-- Top bar -->
   <div class="game-top-bar">
     <div class="top-bar-left">
-      <span class="game-mission-name">${session.scenarioName || session.scenarioId || 'Миссия'}</span>
+      <span class="game-mission-name" id="mission-name-label">${session.scenarioName || session.scenarioId || 'Миссия'}</span>
     </div>
     <div class="game-info-center">
       <span>Раунд <strong id="round-num">0</strong></span>
@@ -513,6 +513,11 @@ function updateHUD() {
   const el = (id: string) => document.getElementById(id);
   if (!el('round-num')) return; // Guard against unmounted DOM
   el('round-num')!.textContent = String(gs.round || 0);
+  // Update scenario name from game state (Russian name from DB)
+  if (gs.scenarioName) {
+    const nameEl = el('mission-name-label');
+    if (nameEl) nameEl.textContent = gs.scenarioName;
+  }
   const modeEl = el('mode-display')!;
   modeEl.textContent = gs.mode === 'combat' ? 'Бой' : 'Исследование';
   modeEl.className = gs.mode === 'combat' ? 'mode-combat' : 'mode-explore';
