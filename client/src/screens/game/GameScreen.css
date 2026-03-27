@@ -260,6 +260,11 @@
 .ginv-action-transfer { background: rgba(255,165,0,0.15) !important; border-color: rgba(255,165,0,0.3) !important; color: #ffa500 !important; }
 .ginv-action-transfer:hover { background: rgba(255,165,0,0.25) !important; }
 
+/* ─── Sneak/Eavesdrop target highlights ─── */
+.cell-sneak-target { background: rgba(128,0,255,0.2) !important; border-color: rgba(128,0,255,0.4) !important; cursor: crosshair !important; }
+.cell-sneak-target:hover { background: rgba(128,0,255,0.35) !important; }
+.token-eavesdrop-target { outline: 2px solid rgba(255,200,50,0.7) !important; border-radius: 50%; cursor: crosshair !important; }
+
 /* ─── Mission objective bar ─── */
 .mission-bar {
   flex-shrink: 0;

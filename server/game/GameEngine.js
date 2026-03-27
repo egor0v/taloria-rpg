@@ -59,6 +59,7 @@ const PARTIAL_VISION_RADIUS = 4;
 // Search / scouting
 const SEARCH_RADIUS = 5;
 const SEARCH_SUCCESS_DC = 10;
+const EAVESDROP_RANGE = 8;
 
 // Hazardous terrain
 const BURNING_DAMAGE = 2;
@@ -239,10 +240,28 @@ class GameEngine {
         if (dist > NPC_INTERACT_RANGE) return { ok: false, error: 'Слишком далеко' };
         return { ok: true };
       }
-      case 'sneak':
-        return this.gs.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
-      case 'eavesdrop':
-        return this.gs.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
+      case 'sneak': {
+        if (this.gs.actionUsed) return { ok: false, error: 'Действие уже использовано' };
+        const targetRow = action.targetRow ?? action.row;
+        const targetCol = action.targetCol ?? action.col;
+        if (targetRow == null || targetCol == null) return { ok: false, error: 'Выберите клетку для подкрадывания' };
+        const sneakDist = Math.abs(hero.row - targetRow) + Math.abs(hero.col - targetCol);
+        const maxSteps = hero.moveRange || hero.stepsRemaining || BASE_MOVE_RANGE;
+        if (sneakDist > maxSteps) return { ok: false, error: `Клетка слишком далеко (макс. ${maxSteps} шагов)` };
+        const cell = this.gs.map[targetRow]?.[targetCol];
+        if (cell === 'wall') return { ok: false, error: 'Нельзя подкрасться к стене' };
+        return { ok: true };
+      }
+      case 'eavesdrop': {
+        if (this.gs.actionUsed) return { ok: false, error: 'Действие уже использовано' };
+        const targetId = action.targetId;
+        if (!targetId) return { ok: false, error: 'Выберите цель для подслушивания' };
+        const target = this.gs.monsters.find(m => m.id === targetId) || this.gs.monsters.find(m => m.id === targetId);
+        if (!target) return { ok: false, error: 'Цель не найдена' };
+        const eavDist = Math.abs(hero.row - target.row) + Math.abs(hero.col - target.col);
+        if (eavDist > EAVESDROP_RANGE) return { ok: false, error: `Слишком далеко (макс. ${EAVESDROP_RANGE} клеток)` };
+        return { ok: true };
+      }
       case 'magic-vision':
         return this.gs.actionUsed ? { ok: false, error: 'Действие уже использовано' } : { ok: true };
       case 'free-action':
@@ -1046,16 +1065,24 @@ class GameEngine {
   executeSneak(action) {
     const hero = this.findHero(action.heroId);
     const SNEAK_DC = 12;
+    const targetRow = action.targetRow ?? action.row;
+    const targetCol = action.targetCol ?? action.col;
     const roll = action.roll || this.rollDice(20);
     const agiBonus = Math.floor(((hero.agility || 0) - 10) / 2);
     const total = roll + agiBonus;
     const success = total >= SNEAK_DC;
 
     if (success) {
+      // Move hero to target cell silently
+      if (targetRow != null && targetCol != null) {
+        hero.row = targetRow;
+        hero.col = targetCol;
+      }
       applyStatus(hero, 'stealth', { duration: 3 });
-      this.addLog(`🥷 ${hero.name} успешно крадётся! Скрытность на 3 хода`, 'log-action');
+      this._updateFogForHero(hero);
+      this.addLog(`🥷 ${hero.name} подкрался к (${targetCol},${targetRow})! Скрытность на 3 хода`, 'log-action');
     } else {
-      // Alert nearby enemies
+      // Failed — alert nearby enemies, hero stays in place
       const nearbyMonsters = this.gs.monsters.filter(m => m.alive && !m.friendly && Math.abs(m.row - hero.row) + Math.abs(m.col - hero.col) <= ENCOUNTER_RANGE);
       nearbyMonsters.forEach(m => { m.aggro = true; m.discovered = true; });
       this.addLog(`🥷 ${hero.name} замечен! ${nearbyMonsters.length} врагов насторожились`, 'log-damage');
@@ -1067,6 +1094,7 @@ class GameEngine {
     return {
       type: 'sneak', heroId: hero.id, heroName: hero.name,
       roll, bonus: agiBonus, total, dc: SNEAK_DC, success,
+      targetRow, targetCol,
       diceRolls: [{ diceType: 'd20', roll, bonus: agiBonus, label: '🥷 Скрытность',
         message: `${hero.name}: d20 + ЛОВ(${agiBonus}) ≥ DC${SNEAK_DC}`, success }],
     };
@@ -1079,6 +1107,8 @@ class GameEngine {
   executeEavesdrop(action) {
     const hero = this.findHero(action.heroId);
     const EAVESDROP_DC = 10;
+    const targetId = action.targetId;
+    const target = this.gs.monsters.find(m => m.id === targetId);
     const roll = action.roll || this.rollDice(20);
     const wisBonus = Math.floor(((hero.wisdom || 0) - 10) / 2);
     const total = roll + wisBonus;
@@ -1086,22 +1116,27 @@ class GameEngine {
 
     let info = '';
     if (success) {
-      // Find nearby enemies and reveal info
-      const nearby = this.gs.monsters.filter(m => m.alive && !m.friendly &&
-        Math.abs(m.row - hero.row) + Math.abs(m.col - hero.col) <= SEARCH_RADIUS);
-      if (nearby.length > 0) {
-        nearby.forEach(m => { m.discovered = true; });
-        const names = nearby.map(m => `${m.name} (HP:${m.hp})`).join(', ');
-        info = `Рядом: ${names}`;
-        this.addLog(`👂 ${hero.name} подслушивает: ${info}`, 'log-action');
-      } else {
-        info = 'Тишина... врагов поблизости нет';
-        this.addLog(`👂 ${hero.name}: тишина рядом`, 'log-action');
+      if (target) {
+        // Reveal specific target info
+        target.discovered = true;
+        const abilities = target.abilities?.length ? `, способности: ${target.abilities.join(', ')}` : '';
+        info = `${target.name}: HP ${target.hp}/${target.maxHp}, ATK ${target.attack || '?'}, ARM ${target.armor || 0}${abilities}`;
+        this.addLog(`👂 ${hero.name} подслушивает ${target.name}: ${info}`, 'log-action');
       }
-      // Also reveal hidden objects
+      // Also reveal nearby enemies within EAVESDROP_RANGE
+      const nearby = this.gs.monsters.filter(m => m.alive && !m.friendly &&
+        Math.abs(m.row - hero.row) + Math.abs(m.col - hero.col) <= EAVESDROP_RANGE);
+      nearby.forEach(m => { m.discovered = true; });
+      // Reveal hidden objects
       this.gs.objects.filter(o => !o.discovered &&
-        Math.abs(o.row - hero.row) + Math.abs(o.col - hero.col) <= SEARCH_RADIUS
+        Math.abs(o.row - hero.row) + Math.abs(o.col - hero.col) <= EAVESDROP_RANGE
       ).forEach(o => { o.discovered = true; });
+      if (!info) {
+        info = nearby.length > 0
+          ? `Рядом: ${nearby.map(m => `${m.name} (HP:${m.hp})`).join(', ')}`
+          : 'Тишина... врагов поблизости нет';
+        this.addLog(`👂 ${hero.name}: ${info}`, 'log-action');
+      }
     } else {
       info = 'Не удалось ничего расслышать';
       this.addLog(`👂 ${hero.name} ничего не услышал`, 'log-damage');
@@ -1112,6 +1147,7 @@ class GameEngine {
 
     return {
       type: 'eavesdrop', heroId: hero.id, heroName: hero.name,
+      targetId, targetName: target?.name,
       roll, bonus: wisBonus, total, dc: EAVESDROP_DC, success, info,
       diceRolls: [{ diceType: 'd20', roll, bonus: wisBonus, label: '👂 Подслушивание',
         message: `${hero.name}: d20 + МУД(${wisBonus}) ≥ DC${EAVESDROP_DC}`, success }],

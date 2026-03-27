@@ -786,6 +786,29 @@ function onCellClick(x: number, y: number) {
     return;
   }
 
+  // Sneak mode — click cell to sneak to it
+  if (actionMode === 'sneak') {
+    document.querySelectorAll('.cell-sneak-target').forEach(c => c.classList.remove('cell-sneak-target'));
+    actionMode = 'move';
+    showInteractiveDicePopup('d20', `Скрытность — подкрадываемся к (${x},${y})`, 12, (roll: number) => {
+      sock.emit('action-request', { type: 'sneak', roll, targetRow: y, targetCol: x });
+    });
+    return;
+  }
+
+  // Eavesdrop mode — click NPC/monster to listen
+  if (actionMode === 'eavesdrop') {
+    const target = gs.monsters?.find((m: any) => m.alive && m.col === x && m.row === y);
+    if (target) {
+      document.querySelectorAll('.token-eavesdrop-target').forEach(c => c.classList.remove('token-eavesdrop-target'));
+      actionMode = 'move';
+      showInteractiveDicePopup('d20', `Подслушать ${target.name}`, 10, (roll: number) => {
+        sock.emit('action-request', { type: 'eavesdrop', roll, targetId: target.id });
+      });
+      return;
+    }
+  }
+
   // Click on hostile monster → attack (row=y, col=x)
   const monster = gs.monsters?.find((m: any) => m.alive && !m.friendly && m.discovered && m.col === x && m.row === y);
   if (monster && (actionMode === 'attack' || actionMode === 'move')) {
@@ -914,20 +937,46 @@ function setupActions(isSolo: boolean, isHost: boolean) {
     });
   });
 
-  // Подкрасться
+  // Подкрасться — выбор клетки в пределах шагов, затем бросок d20
   document.getElementById('dd-sneak')?.addEventListener('click', () => {
     ddWrap.style.display = 'none';
-    showInteractiveDicePopup('d20', 'Скрытность — бросьте кубик', 12, (roll) => {
-      sock?.emit('action-request', { type: 'sneak', roll });
-    });
+    actionMode = 'sneak';
+    log('🥷 Выберите клетку для подкрадывания (в пределах шагов)', 'system');
+    // Highlight reachable cells
+    const hero = getMyHero();
+    if (hero) {
+      const steps = hero.stepsRemaining ?? hero.moveRange ?? BASE_MOVE_RANGE;
+      document.querySelectorAll('.map-cell').forEach(cell => {
+        const r = parseInt((cell as HTMLElement).dataset.y || '0');
+        const c = parseInt((cell as HTMLElement).dataset.x || '0');
+        const dist = Math.abs(hero.row - r) + Math.abs(hero.col - c);
+        if (dist > 0 && dist <= steps) {
+          const terrain = gs?.map?.[r]?.[c];
+          if (terrain !== 'wall') (cell as HTMLElement).classList.add('cell-sneak-target');
+        }
+      });
+    }
   });
 
-  // Подслушать
+  // Подслушать — выбор NPC/монстра в пределах 8 клеток, затем бросок d20
   document.getElementById('dd-eavesdrop')?.addEventListener('click', () => {
     ddWrap.style.display = 'none';
-    showInteractiveDicePopup('d20', 'Подслушивание — бросьте кубик', 10, (roll) => {
-      sock?.emit('action-request', { type: 'eavesdrop', roll });
-    });
+    actionMode = 'eavesdrop';
+    log('👂 Выберите цель для подслушивания (в пределах 8 клеток)', 'system');
+    // Highlight targetable NPCs
+    const hero = getMyHero();
+    if (hero) {
+      document.querySelectorAll('[data-npc-id]').forEach(el => {
+        const npcId = (el as HTMLElement).dataset.npcId || '';
+        const npc = npcDataStore.get(npcId);
+        if (!npc) return;
+        // Find NPC position in game state
+        const monster = gs?.monsters?.find((m: any) => m.id === npcId);
+        if (!monster) return;
+        const dist = Math.abs(hero.row - monster.row) + Math.abs(hero.col - monster.col);
+        if (dist <= 8) (el as HTMLElement).classList.add('token-eavesdrop-target');
+      });
+    }
   });
 
   // Свободное действие
