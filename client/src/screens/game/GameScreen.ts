@@ -275,18 +275,20 @@ function buildHTML(isSolo: boolean): string {
       </div>
     </div>
 
-    <!-- Mission objective bar -->
-    <div class="mission-bar" id="mission-bar">
-      <div class="mission-bar-header" id="mission-bar-toggle">
-        <span class="mission-bar-icon">🎯</span>
-        <span class="mission-bar-label" id="mission-bar-label">Цель миссии</span>
-        <span class="mission-bar-arrow" id="mission-bar-arrow">▾</span>
+    <!-- Center column: mission bar + map -->
+    <div class="game-center-col">
+      <!-- Mission objective bar -->
+      <div class="mission-bar" id="mission-bar">
+        <div class="mission-bar-header" id="mission-bar-toggle">
+          <span class="mission-bar-icon">🎯</span>
+          <span class="mission-bar-label" id="mission-bar-label">Цель миссии</span>
+          <span class="mission-bar-arrow" id="mission-bar-arrow">▾</span>
+        </div>
+        <div class="mission-bar-body" id="mission-bar-body" style="display:none"></div>
       </div>
-      <div class="mission-bar-body" id="mission-bar-body" style="display:none"></div>
-    </div>
 
-    <!-- Map -->
-    <div class="game-map-area" id="map-area">
+      <!-- Map -->
+      <div class="game-map-area" id="map-area">
       <div class="game-zoom">
         <button class="zoom-btn" id="btn-zoom-in">+</button>
         <button class="zoom-btn" id="btn-zoom-out">−</button>
@@ -297,6 +299,7 @@ function buildHTML(isSolo: boolean): string {
         </div>
       </div>
     </div>
+    </div><!-- /game-center-col -->
 
     <!-- Mobile log toggle -->
     <button class="mobile-log-toggle" id="btn-toggle-log">📋</button>

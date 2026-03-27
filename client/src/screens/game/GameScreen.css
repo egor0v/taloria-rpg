@@ -68,6 +68,9 @@
 .team-turn-indicator { font-size: 0.58rem; color: var(--gold); margin-top: 2px; }
 .status-icon { font-size: 0.6rem; margin-left: 2px; }
 
+/* ─── CENTER COLUMN (mission bar + map) ─── */
+.game-center-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
 /* ─── MAP AREA (center) ─── */
 .game-map-area { flex: 1; position: relative; overflow: hidden; }
 .game-map-scroll { width: 100%; height: 100%; overflow: auto; }
@@ -259,6 +262,7 @@
 
 /* ─── Mission objective bar ─── */
 .mission-bar {
+  flex-shrink: 0;
   background: linear-gradient(90deg, rgba(201,162,78,0.08), rgba(20,18,14,0.95) 60%);
   border-bottom: 1px solid rgba(201,162,78,0.15);
   z-index: 10; flex-shrink: 0;
