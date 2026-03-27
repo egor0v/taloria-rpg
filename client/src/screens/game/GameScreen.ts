@@ -271,7 +271,7 @@ function buildHTML(isSolo: boolean): string {
       <div id="team-panel"></div>
       <div class="spectator-section" id="spectator-section" style="display:none">
         <div class="spectator-divider">── Наблюдатели ──</div>
-        <div class="spectator-count" id="spectator-count">👁 0 зрителей</div>
+        <div class="spectator-count" id="spectator-count">👁 Наблюдателей: 0</div>
       </div>
     </div>
 
@@ -2136,7 +2136,7 @@ function updateSpectatorPanel() {
   const countEl = document.getElementById('spectator-count');
   if (section && spectatorCount > 0) {
     section.style.display = 'block';
-    if (countEl) countEl.textContent = `👁 ${spectatorCount} ${spectatorCount === 1 ? 'зритель' : spectatorCount < 5 ? 'зрителя' : 'зрителей'}`;
+    if (countEl) countEl.textContent = `👁 Наблюдателей: ${spectatorCount}`;
   } else if (section) {
     section.style.display = 'none';
   }
