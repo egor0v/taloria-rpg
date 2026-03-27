@@ -1796,27 +1796,58 @@ function fmtAction(data: any): string {
   const r = data.result || {};
   const rType = r.type || data.action?.type;
   switch (rType) {
-    case 'move': return `➡ ${r.heroName || 'Герой'} → (${r.toCol ?? r.to?.x ?? '?'},${r.toRow ?? r.to?.y ?? '?'})${r.trap ? ' ⚡Ловушка! -' + r.trap.damage + 'HP' : ''}${r.encounter ? ' 👹 Встреча!' : ''}`;
-    case 'attack': {
-      if (r.dodged) return `🤸 ${r.targetName} уклонился!`;
-      if (r.isMiss) return `❌ ${r.heroName} промах (d20=1)`;
-      if (!r.hits) return `🛡 ${r.heroName}: d20=${r.d20} ≤ ${r.effectiveArmor} — отбито`;
-      return `⚔ ${r.heroName} → ${r.targetName}: ${r.damage} урона${r.isCrit ? ' 💥КРИТ!' : ''} (d20=${r.d20}, ${r.damageDie}=${r.damageRoll})${!r.targetAlive ? ' ☠ УБИТ!' : ` [${r.targetHp}HP]`}${r.counterAttack ? ` ↩ Контратака: ${r.counterAttack.damage} урона` : ''}`;
+    case 'move': {
+      let msg = `➡ ${r.heroName || 'Герой'} перемещается`;
+      if (r.trap) msg += ` ⚡ Ловушка! −${r.trap.damage} HP`;
+      if (r.encounter) msg += ' 👹 Враг рядом!';
+      return msg;
     }
-    case 'search': return r.success ? `🔍 Разведка: d20=${r.roll}+${r.bonus}=${r.total}, радиус ${r.radius}, найдено: ${r.discovered?.length || 0}` : `🔍 Ничего (d20=${r.roll})`;
+    case 'attack': {
+      if (r.dodged) return `🤸 ${r.targetName} уклоняется от удара!`;
+      if (r.isMiss) return `❌ ${r.heroName} промахивается!`;
+      if (!r.hits) return `🛡 ${r.heroName} атакует ${r.targetName} — удар отражён!`;
+      let msg = `⚔ ${r.heroName} наносит ${r.damage} урона по ${r.targetName}`;
+      if (r.isCrit) msg += ' 💥 Критический удар!';
+      if (!r.targetAlive) msg += ' ☠ Повержен!';
+      if (r.counterAttack) msg += ` ↩ Ответный удар: ${r.counterAttack.damage} урона`;
+      return msg;
+    }
+    case 'search': return r.success
+      ? `🔍 ${r.heroName || 'Герой'} проводит разведку — обнаружено: ${r.discovered?.length || 0}`
+      : `🔍 ${r.heroName || 'Герой'} осматривается — ничего не найдено`;
     case 'end-turn': return `⏭ Конец хода. Раунд ${r.round}`;
-    case 'rest': return `🛌 Отдых: +${r.hpRestored} HP`;
+    case 'rest': return `🛌 ${r.heroName || 'Герой'} отдыхает: +${r.hpRestored} HP`;
     case 'free-action': return `💬 ${r.description || r.text}`;
-    case 'sneak': return r.success ? `🥷 Скрытность! (d20=${r.roll}+${r.bonus}=${r.total} ≥ ${r.dc})` : `🥷 Замечен (d20=${r.roll}+${r.bonus}=${r.total} < ${r.dc})`;
-    case 'eavesdrop': return r.success ? `👂 Подслушал! ${r.info || ''}` : `👂 Ничего не услышал`;
-    case 'magic-vision': return r.success ? `👁 Магическое зрение! Обнаружено: ${r.discovered || 0}` : `👁 Ничего не видно`;
-    case 'use-item': return `🧪 ${r.itemName}: ${r.healing ? '+' + r.healing + ' HP' : ''}${r.manaRestored ? '+' + r.manaRestored + ' MP' : ''}`;
-    case 'ability': return `✨ ${r.abilityName || 'Способность'}${r.healing ? ': +' + r.healing + ' HP' : ''}${r.damage ? ': ' + r.damage + ' урона' : ''}${r.shield ? ': щит +' + r.shield : ''} (${r.manaCost} MP)`;
-    case 'talk': return `💬 ${r.heroName || 'Герой'} → ${r.npcName || 'НПС'}`;
-    case 'interact': return `🤝 ${r.objectType === 'chest' ? '📦 Сундук' : r.message || r.name || 'Взаимодействие'}`;
-    case 'loot': return `🎁 ${r.targetName}: ${r.loot?.length || 0} предметов`;
-    case 'combat-start': return `⚔ БОЙ! Порядок: ${r.turnOrder?.map((t: any) => t.name).join(' → ')}`;
-    default: return `⚡ ${r.type || data.action?.type || 'Действие'}`;
+    case 'sneak': return r.success
+      ? `🥷 ${r.heroName || 'Герой'} скрывается в тенях!`
+      : `🥷 ${r.heroName || 'Герой'} замечен врагами!`;
+    case 'eavesdrop': return r.success
+      ? `👂 ${r.heroName || 'Герой'} подслушивает: ${r.info || 'полезная информация'}`
+      : `👂 Не удалось подслушать`;
+    case 'magic-vision': return r.success
+      ? `👁 Магическое зрение — обнаружены скрытые объекты!`
+      : `👁 Магическое зрение не дало результатов`;
+    case 'use-item': {
+      let msg = `🧪 ${r.heroName || 'Герой'} использует ${r.itemName || 'предмет'}`;
+      if (r.healing) msg += `: +${r.healing} HP`;
+      if (r.manaRestored) msg += `: +${r.manaRestored} MP`;
+      return msg;
+    }
+    case 'ability': {
+      let msg = `✨ ${r.heroName || 'Герой'} применяет ${r.abilityName || 'способность'}`;
+      if (r.damage) msg += `: ${r.damage} урона`;
+      if (r.healing) msg += `: +${r.healing} HP`;
+      if (r.shield) msg += `: щит +${r.shield}`;
+      if (r.manaCost) msg += ` (−${r.manaCost} MP)`;
+      return msg;
+    }
+    case 'talk': return `💬 ${r.heroName || 'Герой'} разговаривает с ${r.npcName || 'НПС'}`;
+    case 'interact': return r.message || `🤝 Взаимодействие`;
+    case 'loot-chest': return `📦 ${r.heroName || 'Герой'} забирает добычу из сундука`;
+    case 'transfer-item': return `🤝 ${r.message || 'Предмет передан'}`;
+    case 'loot': return `🎁 ${r.heroName || 'Герой'} собирает добычу`;
+    case 'combat-start': return `⚔ Начинается бой! ${r.turnOrder?.map((t: any) => t.name).join(' → ')}`;
+    default: return r.message || `⚡ Действие`;
   }
 }
 
